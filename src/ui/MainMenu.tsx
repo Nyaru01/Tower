@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, ShieldAlert, Database } from 'lucide-react';
+import { X, ShieldAlert, Database, Layers } from 'lucide-react';
 
 interface MainMenuProps {
   onPlay: () => void;
+  onOpenEditor: () => void;
 }
 
 const ENEMIES = [
@@ -32,7 +33,7 @@ const ENEMIES = [
   ), desc: "L'entité maîtresse. Ce noyau massif possède une résistance extrême et des points de vie colossaux." },
 ];
 
-export default function MainMenu({ onPlay }: MainMenuProps) {
+export default function MainMenu({ onPlay, onOpenEditor }: MainMenuProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showBestiary, setShowBestiary] = useState(false);
   const [glitchTitle, setGlitchTitle] = useState(false);
@@ -257,6 +258,18 @@ export default function MainMenu({ onPlay }: MainMenuProps) {
               <div className="flex items-center gap-3">
                 <Database size={16} className="text-[#a78bfa]" />
                 <span className="text-white/80 font-bold text-sm tracking-[0.2em] group-hover:text-white transition-colors">BESTIAIRE</span>
+              </div>
+            </button>
+
+            {/* Editor Button */}
+            <button
+              onClick={onOpenEditor}
+              className="anim-up relative w-full h-[52px] flex flex-row justify-between items-center px-5 cursor-pointer btn-tech group"
+              style={{ animationDelay: '0.5s', opacity: 0, borderRadius: '8px' }}
+            >
+              <div className="flex items-center gap-3">
+                <Layers size={16} className="text-[#00f5c4]" />
+                <span className="text-white/80 font-bold text-sm tracking-[0.2em] group-hover:text-white transition-colors">ÉDITEUR</span>
               </div>
             </button>
           </div>
