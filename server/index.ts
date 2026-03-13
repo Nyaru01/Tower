@@ -5,25 +5,40 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
 
+console.log('🏁 [SERVER] Starting initialization...');
+
 dotenv.config();
+
+console.log('⚙️ [SERVER] Environment:', {
+  PORT: process.env.PORT,
+  NODE_ENV: process.env.NODE_ENV,
+  HAS_DB_URL: !!process.env.DATABASE_URL
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+console.log('🔌 [SERVER] Creating Prisma client...');
 
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
 
+// ULTRA-PRIORITY Healthcheck for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from frontend
-app.use(express.static(path.join(__dirname, '../../dist')));
+// Resolve static path
+const staticPath = path.join(__dirname, '../../dist');
+console.log(`📂 [SERVER] Static files path: ${staticPath}`);
+console.log(`📂 [SERVER] Exists:`, { dist: path.join(__dirname, '../../dist') });
 
-// Routes de base
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
+// Serve static files from frontend
+app.use(express.static(staticPath));
 
 // Sync Progress
 app.post('/api/sync', async (req, res) => {
@@ -97,8 +112,10 @@ app.post('/api/levels', async (req, res) => {
 });
 
 app.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`🚀 Proxy Tower Server started on 0.0.0.0:${PORT}`);
-  console.log(`📡 Healthcheck path: /health`);
+  console.log(`✅ [SERVER] Proxy Tower Server is UP and listening on 0.0.0.0:${PORT}`);
+  console.log(`🏥 [SERVER] Healthcheck available at: /health`);
+}).on('error', (err) => {
+  console.error('❌ [SERVER] Failed to listen:', err);
 });
 
 // All other requests serve the frontend
