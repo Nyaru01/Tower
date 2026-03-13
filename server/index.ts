@@ -111,9 +111,16 @@ app.post('/api/levels', async (req, res) => {
   }
 });
 
-app.listen(Number(PORT), '0.0.0.0', () => {
+app.listen(Number(PORT), '0.0.0.0', async () => {
   console.log(`✅ [SERVER] Proxy Tower Server is UP and listening on 0.0.0.0:${PORT}`);
   console.log(`🏥 [SERVER] Healthcheck available at: /health`);
+  
+  try {
+    await prisma.$connect();
+    console.log('🐘 [SERVER] Database connected successfully');
+  } catch (err) {
+    console.error('❌ [SERVER] Database connection failed:', err);
+  }
 }).on('error', (err) => {
   console.error('❌ [SERVER] Failed to listen:', err);
 });
