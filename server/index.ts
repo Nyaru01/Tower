@@ -27,16 +27,27 @@ const PORT = process.env.PORT || 3001;
 // PRE-INITIALIZE CLOUD DB (ASYNCHRONOUSLY)
 async function initDatabase() {
   console.log('🐘 [SERVER] Starting database sync...');
+  const serverDir = path.resolve(__dirname, '..');
+  const prismaBin = path.join(serverDir, 'node_modules/.bin/prisma');
+  const schemaPath = path.join(serverDir, 'prisma/schema.prisma');
+  
+  console.log(`⚙️ [SERVER] DB Config:`, { serverDir, prismaBin, schemaPath });
+
   try {
-    // Try to push schema (non-blocking for server start)
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL is not defined');
+    }
+
     console.log('🐘 [SERVER] Running prisma db push...');
-    const schemaPath = path.resolve(__dirname, '../prisma/schema.prisma');
-    console.log(`📜 [SERVER] Schema path: ${schemaPath}`);
-    // We use npx prisma db push to sync schema without needing migrations files
-    execSync(`npx prisma db push --accept-data-loss --schema="${schemaPath}"`, { stdio: 'inherit' });
+    // Use the absolute path to prisma binary and set the correct working directory
+    execSync(`"${prismaBin}" db push --accept-data-loss --schema="${schemaPath}"`, { 
+      stdio: 'inherit',
+      cwd: serverDir,
+      env: { ...process.env }
+    });
     console.log('🐘 [SERVER] Database schema synced successfully');
   } catch (err) {
-    console.error('❌ [SERVER] Database sync failed (will retry on first request):', err);
+    console.error('❌ [SERVER] Database sync failed:', err);
   }
 }
 
