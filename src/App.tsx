@@ -114,6 +114,7 @@ export default function App(){
   const [isInMenu,setIsInMenu]=useState(true);
   const [isInEditor,setIsInEditor]=useState(false);
   const [customLevels, setCustomLevels] = useState<Record<number, any>>({});
+  const [officialLevels, setOfficialLevels] = useState<Record<number, any>>({});
   const [levelRewards,setLevelRewards]=useState<Reward[]>([]);
   const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null);
 
@@ -172,8 +173,8 @@ export default function App(){
     s.wave = 1;
     s.status = 'idle';
     
-    // Check custom levels first, then initial levels, then procedural
-    const lvlConfig = customLevels[lvl] || INITIAL_LEVELS[lvl];
+    // Check official levels from DB first, then custom ones, then hardcoded defaults
+    const lvlConfig = officialLevels[lvl] || customLevels[lvl] || INITIAL_LEVELS[lvl];
     
     if (lvlConfig) {
       s.path = lvlConfig.path || [{x:200,y:70},{x:200,y:675}];
@@ -187,7 +188,18 @@ export default function App(){
         {id:5,x:106,y:550,r:16,tower:null,side:'left'}, {id:6,x:294,y:550,r:16,tower:null,side:'right'},
       ];
     }
-  }, [customLevels]);
+  }, [officialLevels, customLevels]);
+
+  // Load official levels on start
+  useEffect(() => {
+    GameAPI.loadOfficialLevels().then(levels => {
+      if (levels && Array.isArray(levels)) {
+        const map: any = {};
+        levels.forEach((l: any) => map[l.levelNumber] = l.data);
+        setOfficialLevels(map);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!isInMenu && !isInEditor && uiState.level === 1 && gs.current.slots.length === 0) {
@@ -616,15 +628,21 @@ export default function App(){
         <LevelEditor
           onBack={() => { setIsInEditor(false); setIsInMenu(true); }}
           initialLevelId={uiState.level}
-          initialConfig={customLevels[uiState.level] || INITIAL_LEVELS[uiState.level]}
+          initialConfig={officialLevels[uiState.level] || customLevels[uiState.level] || INITIAL_LEVELS[uiState.level]}
           customLevels={customLevels}
           onSave={(lvlId, config) => {
-            setCustomLevels(prev => {
-              const next = { ...prev, [lvlId]: config };
-              localStorage.setItem('pt_custom_levels', JSON.stringify(next));
-              GameAPI.saveCustomLevel(GameAPI.getTerminalId(), lvlId, config);
-              return next;
-            });
+            // If it's a default level (1-5), save as official level globally
+            if (lvlId <= 5) {
+              setOfficialLevels(prev => ({ ...prev, [lvlId]: config }));
+              GameAPI.saveOfficialLevel(GameAPI.getTerminalId(), lvlId, config);
+            } else {
+              setCustomLevels(prev => {
+                const next = { ...prev, [lvlId]: config };
+                localStorage.setItem('pt_custom_levels', JSON.stringify(next));
+                GameAPI.saveCustomLevel(GameAPI.getTerminalId(), lvlId, config);
+                return next;
+              });
+            }
           }}
           onTest={(config) => {
             // Save before test to ensure consistency

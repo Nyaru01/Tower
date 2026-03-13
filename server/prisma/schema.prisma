@@ -29,3 +29,9 @@ model CustomLevel {
 
   @@unique([playerId, levelNumber])
 }
+
+model GlobalLevel {
+  levelNumber Int      @id
+  data        Json
+  updatedAt   DateTime @updatedAt
+}

@@ -24,6 +24,49 @@ console.log('🔌 [SERVER] Initializing Express...');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const OFFICIAL_DEFAULTS = {
+  1: {
+    path: [{x:200,y:70},{x:200,y:675}],
+    slots: [
+      {id:1,x:106,y:250,r:16,tower:null,side:'left'},{id:2,x:106,y:400,r:16,tower:null,side:'left'},
+      {id:3,x:106,y:550,r:16,tower:null,side:'left'},{id:4,x:294,y:250,r:16,tower:null,side:'right'},
+      {id:5,x:294,y:400,r:16,tower:null,side:'right'},{id:6,x:294,y:550,r:16,tower:null,side:'right'},
+    ]
+  },
+  2: {
+    path: [{x:200,y:70}, {x:100,y:250}, {x:300,y:450}, {x:200,y:750}],
+    slots: [
+      {id:1,x:240,y:180,r:16,tower:null,side:'right'}, {id:2,x:50,y:350,r:16,tower:null,side:'left'},
+      {id:3,x:350,y:350,r:16,tower:null,side:'right'}, {id:4,x:180,y:500,r:16,tower:null,side:'left'},
+      {id:5,x:280,y:650,r:16,tower:null,side:'right'}, {id:6,x:100,y:600,r:16,tower:null,side:'left'},
+    ]
+  },
+  3: {
+    path: [{x:100,y:70}, {x:100,y:550}, {x:300,y:550}, {x:300,y:750}],
+    slots: [
+      {id:1,x:200,y:300,r:16,tower:null,side:'center'}, {id:2,x:200,y:450,r:16,tower:null,side:'center'},
+      {id:3,x:40,y:300,r:16,tower:null,side:'left'}, {id:4,x:360,y:300,r:16,tower:null,side:'right'},
+      {id:5,x:40,y:450,r:16,tower:null,side:'left'}, {id:6,x:360,y:450,r:16,tower:null,side:'right'},
+    ]
+  },
+  4: {
+    path: [{x:200,y:70}, {x:350,y:200}, {x:50,y:350}, {x:350,y:500}, {x:200,y:750}],
+    slots: [
+      {id:1,x:200,y:250,r:16,tower:null,side:'center'}, {id:2,x:200,y:400,r:16,tower:null,side:'center'},
+      {id:3,x:80,y:150,r:16,tower:null,side:'left'}, {id:4,x:320,y:350,r:16,tower:null,side:'right'},
+      {id:5,x:80,y:550,r:16,tower:null,side:'left'}, {id:6,x:320,y:650,r:16,tower:null,side:'right'},
+    ]
+  },
+  5: {
+    path: [{x:100,y:70}, {x:100,y:200}, {x:300,y:200}, {x:300,y:400}, {x:100,y:400}, {x:100,y:600}, {x:300,y:600}, {x:300,y:750}],
+    slots: [
+      {id:1,x:200,y:100,r:16,tower:null,side:'center'}, {id:2,x:200,y:300,r:16,tower:null,side:'center'},
+      {id:3,x:200,y:500,r:16,tower:null,side:'center'}, {id:4,x:200,y:700,r:16,tower:null,side:'center'},
+      {id:5,x:50,y:400,r:16,tower:null,side:'left'}, {id:6,x:350,y:200,r:16,tower:null,side:'right'},
+    ]
+  }
+};
+
 // PRE-INITIALIZE CLOUD DB (ASYNCHRONOUSLY)
 async function initDatabase() {
   console.log('🐘 [SERVER] Starting database sync...');
@@ -46,6 +89,21 @@ async function initDatabase() {
       env: { ...process.env }
     });
     console.log('🐘 [SERVER] Database schema synced successfully');
+
+    // Seed official levels if empty
+    const count = await prisma.globalLevel.count();
+    if (count === 0) {
+      console.log('🐘 [SERVER] Seeding official levels...');
+      for (const [lvl, data] of Object.entries(OFFICIAL_DEFAULTS)) {
+        await prisma.globalLevel.create({
+          data: {
+            levelNumber: parseInt(lvl),
+            data: data as any
+          }
+        });
+      }
+      console.log('🐘 [SERVER] Official levels seeded');
+    }
   } catch (err) {
     console.error('❌ [SERVER] Database sync failed:', err);
   }
@@ -137,6 +195,40 @@ app.post('/api/levels', async (req, res) => {
     res.json(level);
   } catch (error) {
     res.status(500).json({ error: 'Failed to save level' });
+  }
+});
+
+// Official Levels (Global)
+app.get('/api/official-levels', async (req, res) => {
+  try {
+    const levels = await prisma.globalLevel.findMany({
+      orderBy: { levelNumber: 'asc' }
+    });
+    res.json(levels);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load official levels' });
+  }
+});
+
+app.post('/api/official-levels', async (req, res) => {
+  const { terminalId, levelNumber, data } = req.body;
+  
+  // For now, let's allow anyone to save official levels to make it easy to update
+  // but we can restrict this to the user's terminalId in the future.
+  try {
+    const level = await prisma.globalLevel.upsert({
+      where: { levelNumber },
+      update: { data },
+      create: {
+        levelNumber,
+        data
+      }
+    });
+    console.log(`🌍 [SERVER] Global level ${levelNumber} updated by ${terminalId}`);
+    res.json(level);
+  } catch (error) {
+    console.error('Failed to save official level:', error);
+    res.status(500).json({ error: 'Failed to save official level' });
   }
 });
 

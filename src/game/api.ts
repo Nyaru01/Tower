@@ -52,5 +52,27 @@ export const GameAPI = {
     } catch (e) {
       console.warn('Level save to cloud failed');
     }
+  },
+
+  loadOfficialLevels: async () => {
+    try {
+      const response = await fetch(`${API_BASE}/official-levels`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (e) {
+      return null;
+    }
+  },
+
+  saveOfficialLevel: async (terminalId: string, levelNumber: number, data: any) => {
+    try {
+      await fetch(`${API_BASE}/official-levels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ terminalId, levelNumber, data })
+      });
+    } catch (e) {
+      console.warn('Official level save failed');
+    }
   }
 };
