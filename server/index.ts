@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
+import { execSync } from 'child_process';
 
 console.log('🏁 [SERVER] Starting initialization...');
 
@@ -18,11 +19,26 @@ console.log('⚙️ [SERVER] Environment:', {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log('🔌 [SERVER] Creating Prisma client...');
+console.log('🔌 [SERVER] Initializing Express...');
 
 const app = express();
-const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
+
+// PRE-INITIALIZE CLOUD DB (ASYNCHRONOUSLY)
+async function initDatabase() {
+  console.log('🐘 [SERVER] Starting database sync...');
+  try {
+    // Try to push schema (non-blocking for server start)
+    console.log('🐘 [SERVER] Running prisma db push...');
+    // We use npx prisma db push to sync schema without needing migrations files
+    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
+    console.log('🐘 [SERVER] Database schema synced successfully');
+  } catch (err) {
+    console.error('❌ [SERVER] Database sync failed (will retry on first request):', err);
+  }
+}
+
+const prisma = new PrismaClient();
 
 // ULTRA-PRIORITY Healthcheck for Railway
 app.get('/health', (req, res) => {
@@ -111,16 +127,18 @@ app.post('/api/levels', async (req, res) => {
   }
 });
 
-app.listen(Number(PORT), '0.0.0.0', async () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`✅ [SERVER] Proxy Tower Server is UP and listening on 0.0.0.0:${PORT}`);
   console.log(`🏥 [SERVER] Healthcheck available at: /health`);
   
-  try {
-    await prisma.$connect();
-    console.log('🐘 [SERVER] Database connected successfully');
-  } catch (err) {
-    console.error('❌ [SERVER] Database connection failed:', err);
-  }
+  // Start database sync in background to not block healthcheck
+  initDatabase().then(() => {
+    return prisma.$connect();
+  }).then(() => {
+    console.log('🐘 [SERVER] Prisma client connected');
+  }).catch(err => {
+    console.error('❌ [SERVER] Background DB init failed:', err);
+  });
 }).on('error', (err) => {
   console.error('❌ [SERVER] Failed to listen:', err);
 });
