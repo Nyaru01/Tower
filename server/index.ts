@@ -96,11 +96,17 @@ app.post('/api/levels', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`🚀 Proxy Tower Server started on 0.0.0.0:${PORT}`);
+  console.log(`📡 Healthcheck path: /health`);
 });
 
 // All other requests serve the frontend
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../../dist/index.html'));
+});
+
+// Global error handler
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });

@@ -33,6 +33,9 @@ FROM node:20-slim
 
 WORKDIR /app
 
+# Install openssl for Prisma
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/server/node_modules ./server/node_modules
