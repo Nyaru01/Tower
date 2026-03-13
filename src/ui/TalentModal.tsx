@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Star, Lock as LockIcon } from 'lucide-react';
 import { BRANCH_META, TALENT_TREE } from '../game/constants';
 
