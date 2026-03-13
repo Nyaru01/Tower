@@ -1,0 +1,31 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id                String   @id @default(uuid())
+  terminalId        String   @unique
+  diamonds          Int      @default(100)
+  talentPoints      Int      @default(0)
+  maxLevelUnlocked  Int      @default(1)
+  unlockedTalents   String[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  customLevels      CustomLevel[]
+}
+
+model CustomLevel {
+  id          String   @id @default(uuid())
+  playerId    String
+  player      Player   @relation(fields: [playerId], references: [id])
+  levelNumber Int
+  data        Json
+  updatedAt   DateTime @updatedAt
+
+  @@unique([playerId, levelNumber])
+}

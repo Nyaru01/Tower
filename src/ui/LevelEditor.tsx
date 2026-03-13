@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Trash2, ArrowLeft, Download, Upload, Cpu, Waypoints, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, ArrowLeft, Download, Upload, Cpu, Waypoints, ChevronDown, ChevronUp, Layers, Check } from 'lucide-react';
+import { INITIAL_LEVELS } from '../game/constants';
 
 const CW = 400, CH = 800;
 
@@ -8,19 +9,44 @@ interface Slot { id: number; x: number; y: number; side: 'left' | 'right'; }
 
 interface LevelEditorProps {
   onBack: () => void;
-  onSave: (config: any) => void;
+  onSave: (id: number, config: any) => void;
   onTest: (config: any) => void;
+  initialConfig?: any;
+  initialLevelId?: number;
+  customLevels?: Record<number, any>;
 }
 
-export default function LevelEditor({ onBack, onSave, onTest }: LevelEditorProps) {
+export default function LevelEditor({ onBack, onSave, onTest, initialConfig, initialLevelId = 1, customLevels = {} }: LevelEditorProps) {
   const [editMode, setEditMode] = useState<'slots' | 'path'>('slots');
-  const [slots, setSlots] = useState<Slot[]>([]);
-  const [path, setPath] = useState<Point[]>([{x:200, y:70}, {x:200, y:675}]);
+  const [currentLevelId, setCurrentLevelId] = useState(initialLevelId);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [slots, setSlots] = useState<Slot[]>(initialConfig?.slots.map((s:any, i:number)=>({id:s.id||i+1, x:s.x, y:s.y, side:s.side})) || []);
+  const [path, setPath] = useState<Point[]>(initialConfig?.path || [{x:200, y:70}, {x:200, y:675}]);
+  
+  const loadLevel = (id: number) => {
+    setCurrentLevelId(id);
+    const config = customLevels[id] || INITIAL_LEVELS[id];
+    if (config) {
+      setSlots(config.slots.map((s:any, i:number)=>({id:s.id||i+1, x:s.x, y:s.y, side:s.side})));
+      setPath(config.path);
+    }
+  };
   const [mousePos, setMousePos] = useState<Point | null>(null);
+  const [draggingSlotId, setDraggingSlotId] = useState<number | null>(null);
+  const [draggingPathIdx, setDraggingPathIdx] = useState<number | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dragOffset = useRef<Point>({ x: 0, y: 0 });
 
-  const drawPreview = useCallback(() => {
+  const getCanvasCoords = (e: React.PointerEvent | React.MouseEvent) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (CW / rect.width),
+      y: (e.clientY - rect.top) * (CH / rect.height)
+    };
+  };
+
+  const drawPreview = useCallback((ts: number = 0) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
@@ -121,18 +147,85 @@ export default function LevelEditor({ onBack, onSave, onTest }: LevelEditorProps
       ctx.textAlign = 'center';
       ctx.fillText(slot.id.toString(), slot.x, slot.y + 4);
     });
+
+    // Crystal orb portal at the end of path
+    if (path.length > 0) {
+      const lastWp = path[path.length - 1];
+      const ot = ts * 0.001;
+      ctx.save();
+      ctx.translate(lastWp.x, lastWp.y);
+      
+      // outer ring
+      const og = ctx.createRadialGradient(0,0,10,0,0,38);
+      og.addColorStop(0,'rgba(40,234,192,0)');
+      og.addColorStop(0.6,`rgba(40,234,192,0.08)`);
+      og.addColorStop(1,'rgba(40,234,192,0)');
+      ctx.fillStyle = og;
+      ctx.beginPath();
+      ctx.ellipse(0,0,38,14,0,0,Math.PI*2);
+      ctx.fill();
+
+      // spinning ring segments
+      for(let i=0; i<6; i++){
+        const a = ot*1.4 + i*Math.PI/3;
+        const x = Math.cos(a)*26, y = Math.sin(a)*10;
+        ctx.globalAlpha = 0.35 + Math.sin(ot*2+i)*0.15;
+        ctx.strokeStyle = '#28EAC0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(x,y,2.5,0,Math.PI*2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // core orb glow
+      const cg = ctx.createRadialGradient(0,0,0,0,0,18);
+      cg.addColorStop(0,'rgba(200,255,245,0.9)');
+      cg.addColorStop(0.3,'rgba(40,234,192,0.6)');
+      cg.addColorStop(0.7,'rgba(20,160,130,0.2)');
+      cg.addColorStop(1,'rgba(20,160,130,0)');
+      ctx.globalAlpha = 0.7 + Math.sin(ot*3)*0.15;
+      ctx.fillStyle = cg;
+      ctx.beginPath();
+      ctx.ellipse(0,0,18,7,0,0,Math.PI*2);
+      ctx.fill();
+
+      // inner bright dot
+      ctx.globalAlpha = 0.9;
+      ctx.shadowColor = '#28EAC0';
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = 'rgba(200,255,248,0.95)';
+      ctx.beginPath();
+      ctx.ellipse(0,0,5,2,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
   }, [slots, path, editMode, mousePos]);
 
   useEffect(() => {
-    drawPreview();
+    let raf: number;
+    const loop = (t: number) => {
+      drawPreview(t);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
   }, [drawPreview]);
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (CW / rect.width);
-    const y = (e.clientY - rect.top) * (CH / rect.height);
-
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const { x, y } = getCanvasCoords(e);
+    
     if (editMode === 'slots') {
+      const hit = slots.find(s => Math.hypot(s.x - x, s.y - y) < 20);
+      if (hit) {
+        setDraggingSlotId(hit.id);
+        dragOffset.current = { x: hit.x - x, y: hit.y - y };
+        return;
+      }
+      
+      // Add new if no hit and not too close to others
       if (slots.some(s => Math.hypot(s.x - x, s.y - y) < 32)) return;
       const newSlot: Slot = {
         id: slots.length > 0 ? Math.max(...slots.map(s => s.id)) + 1 : 1,
@@ -141,15 +234,38 @@ export default function LevelEditor({ onBack, onSave, onTest }: LevelEditorProps
       };
       setSlots([...slots, newSlot]);
     } else {
+      const hitIdx = path.findIndex(p => Math.hypot(p.x - x, p.y - y) < 12);
+      if (hitIdx !== -1) {
+        setDraggingPathIdx(hitIdx);
+        dragOffset.current = { x: path[hitIdx].x - x, y: path[hitIdx].y - y };
+        return;
+      }
       setPath([...path, { x, y }]);
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (CW / rect.width);
-    const y = (e.clientY - rect.top) * (CH / rect.height);
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const { x, y } = getCanvasCoords(e);
     setMousePos({ x, y });
+
+    if (draggingSlotId !== null) {
+      setSlots(prev => prev.map(s => s.id === draggingSlotId ? { 
+        ...s, 
+        x: x + dragOffset.current.x, 
+        y: y + dragOffset.current.y, 
+        side: (x + dragOffset.current.x) < 200 ? 'left' : 'right' 
+      } : s));
+    } else if (draggingPathIdx !== null) {
+      setPath(prev => prev.map((p, i) => i === draggingPathIdx ? { 
+        x: x + dragOffset.current.x, 
+        y: y + dragOffset.current.y 
+      } : p));
+    }
+  };
+
+  const handlePointerUp = () => {
+    setDraggingSlotId(null);
+    setDraggingPathIdx(null);
   };
 
   const removeSlot = (id: number) => setSlots(slots.filter(s => s.id !== id));
@@ -170,8 +286,9 @@ export default function LevelEditor({ onBack, onSave, onTest }: LevelEditorProps
   });
 
   const handleSave = () => {
-    onSave(getConfig());
-    onBack();
+    onSave(currentLevelId, getConfig());
+    setShowSaveConfirm(true);
+    setTimeout(() => setShowSaveConfirm(false), 2000);
   };
 
   const handleTest = () => {
@@ -204,11 +321,20 @@ export default function LevelEditor({ onBack, onSave, onTest }: LevelEditorProps
               ref={canvasRef}
               width={CW}
               height={CH}
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-              onClick={handleCanvasClick}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={() => setMousePos(null)}
-              className="cursor-crosshair shadow-[0_0_100px_rgba(0,0,0,0.5)]"
+              style={{ 
+                width: '100%', 
+                height: '100%', 
+                objectFit: 'contain',
+                cursor: (draggingSlotId !== null || draggingPathIdx !== null) ? 'grabbing' : 'crosshair'
+              }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={() => {
+                handlePointerUp();
+                setMousePos(null);
+              }}
+              className="shadow-[0_0_100px_rgba(0,0,0,0.5)] touch-none"
             />
             
             {/* Context Widget (Mode indicator) */}
@@ -227,7 +353,7 @@ export default function LevelEditor({ onBack, onSave, onTest }: LevelEditorProps
             <ArrowLeft size={18} />
           </button>
           <div className="pr-4">
-            <h2 className="text-white font-black text-sm tracking-tighter uppercase leading-none">ÉDITEUR</h2>
+            <h2 className="text-white font-black text-sm tracking-tighter uppercase leading-none">ÉDITEUR - NVX.{currentLevelId}</h2>
             <span className="text-white/20 text-[8px] font-bold uppercase tracking-widest">{editMode} mode</span>
           </div>
         </div>
@@ -242,6 +368,29 @@ export default function LevelEditor({ onBack, onSave, onTest }: LevelEditorProps
         >
           {isCollapsed ? <ChevronUp size={16} className="text-[#00f5c4]" /> : <ChevronDown size={16} className="text-white/40" />}
         </button>
+
+        {/* Level Selector */}
+        <div className="mb-4 shrink-0">
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <Layers size={12} className="text-[#00f5c4]" />
+            <span className="text-white/40 text-[9px] font-black tracking-widest uppercase">Éditer NVX.</span>
+          </div>
+          <div className="grid grid-cols-5 gap-1.5">
+            {[1, 2, 3, 4, 5].map(id => (
+              <button
+                key={id}
+                onClick={() => loadLevel(id)}
+                className={`h-8 rounded-lg border mf font-black text-[11px] transition-all
+                  ${currentLevelId === id 
+                    ? 'bg-[#00f5c4]/20 border-[#00f5c4] text-[#00f5c4] shadow-[0_0_10px_#00f5c430]' 
+                    : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:border-white/20 hover:text-white'
+                  }`}
+              >
+                {id}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Mode Switcher */}
         <div className="flex gap-2 p-1.5 bg-white/5 rounded-2xl mb-6 border border-white/5 shrink-0">
@@ -317,8 +466,12 @@ export default function LevelEditor({ onBack, onSave, onTest }: LevelEditorProps
 
         <div className="pt-6 mt-4 border-t border-white/5 space-y-3 shrink-0">
           <div className="grid grid-cols-2 gap-3">
-            <button onClick={handleSave} className="py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-black tracking-widest text-[10px] active:scale-95 transition-all uppercase">
-              Sauvegarder
+            <button 
+              onClick={handleSave} 
+              className={`py-4 rounded-2xl border font-black tracking-widest text-[10px] active:scale-95 transition-all uppercase flex items-center justify-center gap-2
+                ${showSaveConfirm ? 'bg-[#00f5c4]/20 border-[#00f5c4] text-[#00f5c4]' : 'bg-white/5 border-white/10 text-white'}`}
+            >
+              {showSaveConfirm ? <><Check size={14} /> ENREGISTRÉ !</> : 'Sauvegarder'}
             </button>
             <button onClick={handleTest} className="py-4 rounded-2xl bg-[#00f5c4] text-[#0b0a16] font-black tracking-[0.2em] text-[11px] active:scale-95 transition-all shadow-[0_10px_30px_rgba(0,245,196,0.3)] uppercase">
               TESTER

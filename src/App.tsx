@@ -1,616 +1,27 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Pause, FastForward, Trophy, Lock as LockIcon, X, Target, Star, RotateCcw, TreePine, Flame, Skull, Swords, Pickaxe, Coins, Castle, HeartPulse, Radio, Settings, Crown, Shield, Heart, Wind, Tag, DollarSign, Zap, Dna, Crosshair, Snowflake, Bomb } from 'lucide-react';
+import { Pause, FastForward, X, Flame, Skull, Zap, Dna, RotateCcw, Trophy, Star, Heart, Wind, DollarSign, Tag } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import MainMenu from './ui/MainMenu';
 import LevelEditor from './ui/LevelEditor';
-
-const CW = 400, CH = 800;
-const C = {
-  bg: '#0b0a16', grid: 'rgba(255,255,255,0.01)', path: '#0b0a16',
-  eNormal: '#ff4d6d', eFast: '#fbbf24', eTank: '#a78bfa', eBoss: '#ef4444', eHit: '#ffffff',
-  diamond: '#fbbf24', health: '#22c55e', healthLow: '#ef4444',
-  uiBg: '#171626', uiBorder: '#252438',
-};
-
-interface TowerDef {
-  id: string; name: string; icon: any; cost: number;
-  color: string; glowColor: string;
-  damage: number; fireRate: number; range: number;
-  critChance: number; critMult: number; upgradeCost: number;
-  special: 'slow' | 'aoe' | null; desc: string; statBar: number[];
-}
-
-const TOWER_TYPES: Record<string, TowerDef> = {
-  cannon:{ id:'cannon', name:'Canon',   icon:Crosshair, cost:15, color:'#cbd5e1', glowColor:'rgba(203,213,225,0.5)', damage:18, fireRate:0.85, range:175, critChance:0.12, critMult:2.0, upgradeCost:20, special:null,  desc:'Équilibré, polyvalent',       statBar:[0.50,0.50,0.50,0.50] },
-  sniper:{ id:'sniper', name:'Sniper',  icon:Target,    cost:25, color:'#34d399', glowColor:'rgba(52,211,153,0.5)',  damage:55, fireRate:2.20, range:280, critChance:0.35, critMult:2.8, upgradeCost:35, special:null,  desc:'Longue portée, hauts dégâts', statBar:[0.90,0.20,0.90,0.85] },
-  rapid: { id:'rapid',  name:'Rapide',  icon:Zap,       cost:20, color:'#fbbf24', glowColor:'rgba(251,191,36,0.5)',  damage:7,  fireRate:0.22, range:130, critChance:0.08, critMult:1.8, upgradeCost:28, special:null,  desc:'Cadence extrême',             statBar:[0.25,0.95,0.35,0.60] },
-  frost: { id:'frost',  name:'Givrant', icon:Snowflake, cost:30, color:'#7dd3fc', glowColor:'rgba(125,211,252,0.5)', damage:10, fireRate:1.10, range:160, critChance:0.05, critMult:1.5, upgradeCost:30, special:'slow',desc:'Ralentit les ennemis',        statBar:[0.30,0.40,0.45,0.30] },
-  mortar:{ id:'mortar', name:'Mortier', icon:Bomb,      cost:40, color:'#fb923c', glowColor:'rgba(251,146,60,0.5)',  damage:40, fireRate:3.00, range:220, critChance:0.10, critMult:2.0, upgradeCost:45, special:'aoe', desc:'Dégâts de zone',              statBar:[0.75,0.15,0.70,0.50] },
-};
-
-interface TalentNode {
-  id: string; branch: 'atk'|'eco'|'def'|'tech'; tier: number;
-  name: string; desc: string; icon: any; requires: string[]; cost: number;
-}
-
-const TALENT_TREE: TalentNode[] = [
-  { id:'atk1', branch:'atk',  tier:1, name:'Acier Aiguisé', desc:'+15% dégâts globaux',           icon:Swords, requires:[],       cost:1 },
-  { id:'atk2', branch:'atk',  tier:2, name:'Œil de Lynx',   desc:'+12% chance critique globale',   icon:Target, requires:['atk1'], cost:1 },
-  { id:'atk3', branch:'atk',  tier:3, name:'Dévastation',   desc:'Crit ×1.5 multiplicateur',       icon:Skull, requires:['atk2'], cost:2 },
-  { id:'eco1', branch:'eco',  tier:1, name:'Mineur',         desc:'+1♦ garanti par kill',           icon:Pickaxe, requires:[],       cost:1 },
-  { id:'eco2', branch:'eco',  tier:2, name:'Négociant',      desc:'Vente des tours à 75%',          icon:Coins, requires:['eco1'], cost:1 },
-  { id:'eco3', branch:'eco',  tier:3, name:'Fortune',        desc:'+75% récompense fin niveau',     icon:Crown, requires:['eco2'], cost:2 },
-  { id:'def1', branch:'def',  tier:1, name:'Rempart',        desc:'+3 points de vie de base',       icon:Shield, requires:[],       cost:1 },
-  { id:'def2', branch:'def',  tier:2, name:'Fortification',  desc:'Boss infligent −2 dégâts',       icon:Castle, requires:['def1'], cost:1 },
-  { id:'def3', branch:'def',  tier:3, name:'Régénération',   desc:'+1 vie par niveau complet',      icon:HeartPulse, requires:['def2'], cost:2 },
-  { id:'tec1', branch:'tech', tier:1, name:'Longue Portée',  desc:'+20% portée de toutes les tours',icon:Radio, requires:[],       cost:1 },
-  { id:'tec2', branch:'tech', tier:2, name:'Mécanisme',      desc:'−15% temps de rechargement',     icon:Settings, requires:['tec1'], cost:1 },
-  { id:'tec3', branch:'tech', tier:3, name:'Suprématie',     desc:'+20% dégâts supplémentaires',    icon:Flame, requires:['tec2'], cost:2 },
-];
-
-interface TalentBonuses {
-  globalDmg: number; globalRange: number; globalFireRate: number;
-  globalCrit: number; critMultBonus: number;
-  bonusDrop: number; sellRatio: number; levelBonusMult: number;
-  bonusHp: number; bossReduct: number; regenPerLevel: number;
-}
-
-function computeBonuses(u: Set<string>): TalentBonuses {
-  return {
-    globalDmg:      1+(u.has('atk1')?0.15:0)+(u.has('tec3')?0.20:0),
-    globalRange:    1+(u.has('tec1')?0.20:0),
-    globalFireRate: 1-(u.has('tec2')?0.15:0),
-    globalCrit:     u.has('atk2')?0.12:0,
-    critMultBonus:  u.has('atk3')?0.50:0,
-    bonusDrop:      u.has('eco1')?1:0,
-    sellRatio:      u.has('eco2')?0.75:0.60,
-    levelBonusMult: u.has('eco3')?1.75:1,
-    bonusHp:        u.has('def1')?3:0,
-    bossReduct:     u.has('def2')?2:0,
-    regenPerLevel:  u.has('def3')?1:0,
-  };
-}
-
-// ─── Level rewards ────────────────────────────────────────────────────────────
-type RewardId = 'heal'|'diamonds'|'talent'|'upgrade_free'|'speed_boost'|'gold_rush'|'tower_discount';
-interface Reward { id:RewardId; icon:any; label:string; desc:string; color:string; }
-const ALL_REWARDS: Reward[] = [
-  {id:'heal',           icon:Heart,       label:'Soin',          desc:'Récupère +2 points de vie',               color:'#4ade80'},
-  {id:'diamonds',       icon:Star,        label:'Trésor',         desc:'Bonus de +40 diamants',                   color:'#fbbf24'},
-  {id:'talent',         icon:TreePine,    label:'Inspiration',    desc:'+1 point de talent supplémentaire',       color:'#c084fc'},
-  {id:'upgrade_free',   icon:Zap,         label:'Amélioration',   desc:'Prochaine amélioration de tour gratuite', color:'#60a5fa'},
-  {id:'speed_boost',    icon:Wind,        label:'Frénésie',       desc:'+20% cadence de feu ce niveau',           color:'#fb923c'},
-  {id:'gold_rush',      icon:DollarSign,  label:"Rush d'Or",      desc:'+50% diamants gagnés ce niveau',          color:'#fbbf24'},
-  {id:'tower_discount', icon:Tag,         label:'Rabais',         desc:'Tours -20% moins chères ce niveau',       color:'#34d399'},
-];
-function pickRewards(lvl: number): Reward[] {
-  const pool=[...ALL_REWARDS];const chosen:Reward[]=[];const used=new Set<number>();
-  if(lvl>=2&&Math.random()<0.6){used.add(0);chosen.push(pool[0]);}
-  while(chosen.length<3){const i=Math.floor(Math.random()*pool.length);if(!used.has(i)){used.add(i);chosen.push(pool[i]);}}
-  return chosen;
-}
-
-const LEVELS_DATA = [
-  {waves:4,baseMobs:3,mobMult:1},{waves:5,baseMobs:4,mobMult:2},{waves:5,baseMobs:5,mobMult:2},
-  {waves:6,baseMobs:6,mobMult:3},{waves:6,baseMobs:8,mobMult:3},
-];
-const getLevelData = (lvl: number) =>
-  lvl<=LEVELS_DATA.length ? LEVELS_DATA[lvl-1]
-  : {waves:6+Math.floor(lvl/5), baseMobs:8+lvl, mobMult:3+Math.floor(lvl/3)};
-
-// ── Game classes ──────────────────────────────────────────────────────────────
-class FloatingText {
-  x:number;y:number;text:string;color:string;life=1.0;scale:number;vy:number;cl:number;
-  constructor(x:number,y:number,text:any,cl=0,cc:string|null=null){
-    this.x=x+(Math.random()*24-12);this.y=y;this.cl=cl;
-    if(cc){this.text=String(text);this.color=cc;this.scale=0.9;this.vy=32;}
-    else if(cl>=2){this.text=`${text}!!`;this.color='#c084fc';this.scale=0.6;this.vy=60;}
-    else if(cl===1){this.text=`${text}!`;this.color='#fbbf24';this.scale=0.55;this.vy=48;}
-    else{this.text=String(text);this.color='#f8fafc';this.scale=0.45;this.vy=40;}
-  }
-  update(dt:number){
-    this.y-=this.vy*dt;this.life-=dt*1.6;
-    const t=1+this.cl*0.45;if(this.scale<t)this.scale=Math.min(t,this.scale+dt*9);
-    return this.life<=0;
-  }
-  draw(ctx:CanvasRenderingContext2D){
-    ctx.save();ctx.translate(this.x,this.y);ctx.scale(this.scale,this.scale);
-    ctx.globalAlpha=Math.max(0,this.life);
-    ctx.font=`900 ${this.cl>=2?18:15}px 'Space Grotesk',sans-serif`;
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.strokeStyle='rgba(0,0,0,0.8)';ctx.lineWidth=4;ctx.strokeText(this.text,0,0);
-    ctx.fillStyle=this.color;ctx.fillText(this.text,0,0);ctx.restore();
-  }
-}
-
-class Particle {
-  x:number;y:number;vx:number;vy:number;life=1.0;color:string;size:number;decay:number;
-  constructor(x:number,y:number,color:string,size=2.5,sm=1){
-    this.x=x;this.y=y;this.color=color;this.size=size;
-    const a=Math.random()*Math.PI*2,s=(Math.random()*140+40)*sm;
-    this.vx=Math.cos(a)*s;this.vy=Math.sin(a)*s;this.decay=2.5+Math.random()*1.5;
-  }
-  update(dt:number){this.x+=this.vx*dt;this.y+=this.vy*dt;this.vx*=0.88;this.vy*=0.88;this.life-=dt*this.decay;return this.life<=0;}
-  draw(ctx:CanvasRenderingContext2D){
-    ctx.globalAlpha=Math.max(0,this.life*this.life);ctx.fillStyle=this.color;
-    ctx.beginPath();ctx.arc(this.x,this.y,this.size*Math.max(0.1,this.life),0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
-  }
-}
-
-class RingBurst {
-  x:number;y:number;color:string;radius=0;max:number;life=1.0;
-  constructor(x:number,y:number,color:string,max:number){this.x=x;this.y=y;this.color=color;this.max=max;}
-  update(dt:number){this.radius+=this.max*dt*3.5;this.life-=dt*3.5;return this.life<=0;}
-  draw(ctx:CanvasRenderingContext2D){
-    ctx.globalAlpha=Math.max(0,this.life*0.55);
-    ctx.strokeStyle=this.color;ctx.lineWidth=2;ctx.shadowColor=this.color;ctx.shadowBlur=8;
-    ctx.beginPath();ctx.arc(this.x,this.y,this.radius,0,Math.PI*2);ctx.stroke();
-    ctx.shadowBlur=0;ctx.globalAlpha=1;
-  }
-}
-
-class AoeBlast {
-  x:number;y:number;radius=0;max:number;life=1.0;
-  constructor(x:number,y:number,r:number){this.x=x;this.y=y;this.max=r;}
-  update(dt:number){this.radius+=this.max*dt*4;this.life-=dt*4;return this.life<=0;}
-  draw(ctx:CanvasRenderingContext2D){
-    const g=ctx.createRadialGradient(this.x,this.y,0,this.x,this.y,this.radius);
-    g.addColorStop(0,'rgba(251,146,60,0)');g.addColorStop(0.6,`rgba(251,146,60,${this.life*0.22})`);g.addColorStop(1,'rgba(251,146,60,0)');
-    ctx.globalAlpha=this.life;ctx.fillStyle=g;ctx.beginPath();ctx.arc(this.x,this.y,this.radius,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle=`rgba(251,146,60,${this.life*0.65})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(this.x,this.y,this.radius,0,Math.PI*2);ctx.stroke();
-    ctx.globalAlpha=1;
-  }
-}
-
-type TargetMode = 'first'|'last'|'strong';
-
-const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-function playKillSound(isBoss: boolean) {
-  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  
-  if (isBoss) {
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.5);
-    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.5);
-  } else {
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(500 + Math.random()*300, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
-    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.1);
-  }
-}
-
-function killEnemy(e:any,state:any,addDia:(n:number)=>void,bon:TalentBonuses){
-  playKillSound(e.isBoss);
-  if(e.isBoss) state.bossPoints = (state.bossPoints||0) + 1;
-  const cnt=e.isBoss?28:10;
-  for(let i=0;i<cnt;i++)state.particles.push(new Particle(e.x,e.y,e.color,e.isBoss?4.5:2.5,e.isBoss?1.4:1));
-  state.rings.push(new RingBurst(e.x,e.y,e.color,e.isBoss?55:30));
-  if(e.isBoss)state.rings.push(new RingBurst(e.x,e.y,'#fff',72));
-  let gained=bon.bonusDrop;
-  if(e.isBoss)gained+=15+Math.floor(Math.random()*10);
-  else if(e.type==='tank'&&Math.random()<0.6)gained+=2;
-  else if(Math.random()<0.25)gained+=1;
-  if(gained>0){
-    const actualGained=state.goldRush?Math.ceil(gained*1.5):gained;
-    addDia(actualGained);
-    state.floatingTexts.push(new FloatingText(e.x,e.y-25,`+${actualGained}♦`,0,C.diamond));
-  }
-  state.kills++;
-}
-
-class Projectile {
-  x:number;y:number;target:any;speed:number;damage:number;cl:number;color:string;special:string|null;size:number;history:{x:number,y:number}[];
-  constructor(x:number,y:number,target:any,dmg:number,cl:number,color:string,special:string|null){
-    this.x=x;this.y=y;this.target=target;this.damage=dmg;this.cl=cl;this.color=color;this.special=special;
-    this.speed=special==='slow'?900:special==='aoe'?650:1350;
-    this.size=special==='aoe'?5:special==='slow'?4:2.5;
-    this.history=[{x,y}];
-  }
-  update(dt:number,state:any,addDia:(n:number)=>void,bon:TalentBonuses){
-    if(!state.enemies.includes(this.target))return true;
-    const dx=this.target.x-this.x,dy=this.target.y-this.y,dist=Math.hypot(dx,dy);
-    if(dist<this.speed*dt){
-      if(this.special==='aoe'){
-        const r=68;state.aoeBlasts.push(new AoeBlast(this.target.x,this.target.y,r));
-        for(const e of state.enemies){
-          if(Math.hypot(e.x-this.target.x,e.y-this.target.y)<=r){
-            e.hp-=this.damage;e.hitFlash=0.07;
-            state.floatingTexts.push(new FloatingText(e.x,e.y-e.radius,Math.ceil(this.damage),this.cl));
-            for(let i=0;i<3;i++)state.particles.push(new Particle(e.x,e.y,'#fb923c',2));
-            if(e.hp<=0)killEnemy(e,state,addDia,bon);
-          }
-        }
-      } else {
-        this.target.hp-=this.damage;this.target.hitFlash=0.07;
-        if(this.special==='slow')this.target.slowTimer=2.8;
-        state.floatingTexts.push(new FloatingText(this.target.x,this.target.y-this.target.radius,Math.ceil(this.damage),this.cl));
-        const col=this.cl>=2?'#c084fc':this.cl===1?'#fbbf24':this.color;
-        for(let i=0;i<4;i++)state.particles.push(new Particle(this.target.x,this.target.y,col,2));
-        if(this.special==='slow')for(let i=0;i<4;i++)state.particles.push(new Particle(this.target.x,this.target.y,'#7dd3fc',2.5));
-        if(this.target.hp<=0)killEnemy(this.target,state,addDia,bon);
-      }
-      return true;
-    }
-    this.x+=(dx/dist)*this.speed*dt;this.y+=(dy/dist)*this.speed*dt;
-    this.history.push({x:this.x,y:this.y});if(this.history.length>4)this.history.shift();
-    return false;
-  }
-  draw(ctx:CanvasRenderingContext2D){
-    const col=this.cl>=2?'#c084fc':this.cl===1?'#fbbf24':this.color;
-    ctx.shadowColor=col;ctx.shadowBlur=this.cl>0?12:6;
-    ctx.beginPath();ctx.arc(this.x,this.y,this.size,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.shadowBlur=0;
-    if(this.history.length>1){
-      ctx.beginPath();ctx.moveTo(this.history[0].x,this.history[0].y);ctx.lineTo(this.x,this.y);
-      ctx.strokeStyle=col;ctx.lineWidth=this.cl>0?2.5:1.5;ctx.globalAlpha=0.4;ctx.lineCap='round';ctx.stroke();ctx.globalAlpha=1;
-    }
-  }
-}
-
-class Enemy {
-  x:number;y:number;isBoss:boolean;type:string='';color:string='#000';
-  speed:number;baseSpeed:number;maxHp:number;hp:number;radius:number;
-  history:{x:number,y:number}[]=[];hitFlash=0;wobble:number;spawnAnim=0;slowTimer=0;
-  path:{x:number,y:number}[];targetWpIdx=0;
-  constructor(abs:number,path:{x:number,y:number}[],isBoss=false){
-    this.path=path;
-    this.x=path[0].x+(Math.random()*16-8);
-    this.y=path[0].y+(Math.random()*16-8);
-    this.isBoss=isBoss;this.wobble=Math.random()*Math.PI*2;
-    this.targetWpIdx=1;
-    // Courbe HP progressive : linéaire jusqu'au niveau 3, puis légère accélération
-    // abs=1→×1.2  abs=5→×1.9  abs=10→×2.9  abs=15→×4.0  (vs 1.25^abs qui donnait ×9 à abs=10)
-    const hm = 1 + abs * 0.18 + Math.pow(Math.max(0, abs - 8), 1.4) * 0.04;
-    const sb = abs * 2.2; // vitesse aussi légèrement réduite
-    const rand = Math.random();
-    if(isBoss){this.type='boss';this.color=C.eBoss;this.speed=28+sb*0.45;this.maxHp=320*hm;this.radius=22;}
-    else if(abs>3&&rand>0.8){this.type='tank';this.color=C.eTank;this.speed=32+sb*0.55;this.maxHp=52*hm;this.radius=13;}
-    else if(abs>2&&rand>0.5){this.type='fast';this.color=C.eFast;this.speed=95+sb*1.3;this.maxHp=13*hm;this.radius=7;}
-    else{this.type='normal';this.color=C.eNormal;this.speed=58+sb;this.maxHp=22*hm;this.radius=9;}
-    this.baseSpeed=this.speed;this.hp=this.maxHp;
-  }
-  update(dt:number){
-    this.spawnAnim=Math.min(1,this.spawnAnim+dt*6);
-    if(this.slowTimer>0){this.slowTimer-=dt;this.speed=this.baseSpeed*0.38;}
-    else this.speed=Math.min(this.baseSpeed,this.speed+dt*60);
-    
-    if(this.targetWpIdx < this.path.length){
-      const target = this.path[this.targetWpIdx];
-      const dx = target.x - this.x, dy = target.y - this.y;
-      const dist = Math.hypot(dx, dy);
-      if(dist < this.speed * dt){
-        this.x = target.x; this.y = target.y;
-        this.targetWpIdx++;
-      } else {
-        this.x += (dx/dist) * this.speed * dt;
-        this.y += (dy/dist) * this.speed * dt;
-      }
-    }
-
-    if(this.hitFlash>0)this.hitFlash-=dt;
-    this.history.push({x:this.x,y:this.y});if(this.history.length>8)this.history.shift();
-    return this.targetWpIdx >= this.path.length;
-  }
-  draw(ctx:CanvasRenderingContext2D,ts:number){
-    const sl=this.slowTimer>0;
-    this.history.forEach((p,i)=>{
-      const r=i/this.history.length;ctx.globalAlpha=r*0.28*this.spawnAnim;
-      ctx.fillStyle=sl?'#7dd3fc':this.color;ctx.beginPath();
-      if(this.isBoss)ctx.roundRect(p.x-this.radius*r*0.8,p.y-this.radius*r*0.8,this.radius*r*1.6,this.radius*r*1.6,5);
-      else ctx.arc(p.x,p.y,this.radius*r*0.8,0,Math.PI*2);ctx.fill();
-    });ctx.globalAlpha=1;
-    const wb=1+Math.sin(ts*0.005+this.wobble)*(this.isBoss?0.04:0.07);
-    ctx.save();ctx.translate(this.x,this.y);ctx.scale(this.spawnAnim*wb,this.spawnAnim*wb);
-    const isHit=this.hitFlash>0;
-    const dc=isHit?C.eHit:sl?'#7dd3fc':this.color;
-    if(!isHit){ctx.shadowColor=sl?'#7dd3fc':this.color;ctx.shadowBlur=this.isBoss?22:12;}
-    ctx.fillStyle=dc;ctx.beginPath();
-    if(this.type==='tank')ctx.roundRect(-this.radius,-this.radius,this.radius*2,this.radius*2,5);
-    else if(this.isBoss)ctx.roundRect(-this.radius,-this.radius,this.radius*2,this.radius*2,9);
-    else ctx.arc(0,0,this.radius,0,Math.PI*2);
-    ctx.fill();ctx.shadowBlur=0;
-    if(this.type==='tank'&&!isHit){ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-this.radius+3,0);ctx.lineTo(this.radius-3,0);ctx.stroke();ctx.beginPath();ctx.moveTo(0,-this.radius+3);ctx.lineTo(0,this.radius-3);ctx.stroke();}
-    if(this.type==='fast'&&!isHit){ctx.fillStyle='rgba(0,0,0,0.3)';ctx.beginPath();ctx.moveTo(0,-this.radius+2);ctx.lineTo(3,1);ctx.lineTo(-3,1);ctx.closePath();ctx.fill();}
-    if(this.isBoss&&!isHit){ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(-9,-6,7,10);ctx.fillRect(2,-6,7,10);ctx.fillStyle='#fff';ctx.fillRect(-7,-3,3,5);ctx.fillRect(4,-3,3,5);}
-    if(sl){ctx.strokeStyle='rgba(125,211,252,0.55)';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(0,0,this.radius+4,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
-    ctx.restore();
-    const hr=Math.max(0,this.hp/this.maxHp);
-    if(hr<1){
-      const bw=this.isBoss?36:20,bx=this.x-bw/2,by=this.y-this.radius-11;
-      ctx.globalAlpha=this.spawnAnim;ctx.fillStyle='rgba(0,0,0,0.65)';ctx.beginPath();ctx.roundRect(bx-1,by-1,bw+2,6,3);ctx.fill();
-      ctx.fillStyle=hr>0.4?C.health:C.healthLow;ctx.beginPath();ctx.roundRect(bx,by,bw*hr,4,2);ctx.fill();ctx.globalAlpha=1;
-    }
-  }
-}
-
-class Tower {
-  x:number;y:number;side:string;def:TowerDef;level=1;
-  damage:number;fireRate:number;range:number;critChance:number;critMult:number;
-  upgradeCost:number;totalSpent:number;maxMulticrit=2;
-  angle:number;scale=0;pulseRing=0;cooldown=0;targetMode:TargetMode='first';
-  constructor(x:number,y:number,side:string,def:TowerDef){
-    this.x=x;this.y=y;this.side=side;this.def=def;
-    this.damage=def.damage;this.fireRate=def.fireRate;this.range=def.range;
-    this.critChance=def.critChance;this.critMult=def.critMult;
-    this.upgradeCost=def.upgradeCost;this.totalSpent=def.cost;
-    this.angle=side==='left'?0:Math.PI;
-  }
-  getSellValue(r:number){return Math.floor(this.totalSpent*r);}
-  get dps(){return(this.damage/this.fireRate)*(1+this.critChance*(this.critMult-1));}
-  upgrade(){
-    this.level++;this.damage+=this.def.damage*0.4;this.fireRate=Math.max(0.1,this.fireRate*0.92);
-    this.range+=8;this.critChance=Math.min(0.85,this.critChance+0.025);
-    if(this.level%5===0)this.maxMulticrit++;
-    this.totalSpent+=this.upgradeCost;this.upgradeCost=Math.floor(this.upgradeCost*1.55);
-    this.scale=1.4;this.pulseRing=0.1;
-  }
-  pickTarget(enemies:any[],bon:TalentBonuses):any{
-    const rng=this.range*bon.globalRange;
-    const inR=enemies.filter((e:any)=>Math.hypot(e.x-this.x,e.y-this.y)<=rng);
-    if(!inR.length)return null;
-    if(this.targetMode==='first')return inR.reduce((a:any,b:any)=>b.y>a.y?b:a);
-    if(this.targetMode==='last')return inR.reduce((a:any,b:any)=>b.y<a.y?b:a);
-    return inR.reduce((a:any,b:any)=>b.hp>a.hp?b:a);
-  }
-  update(dt:number,state:any,bon:TalentBonuses){
-    this.cooldown-=dt;
-    if(this.scale>1)this.scale=Math.max(1,this.scale-dt*3.5);
-    else if(this.scale<1)this.scale=Math.min(1,this.scale+dt*6);
-    if(this.pulseRing>0){this.pulseRing+=dt*185;if(this.pulseRing>58)this.pulseRing=0;}
-    const target=this.pickTarget(state.enemies,bon);
-    if(target){
-      const ta=Math.atan2(target.y-this.y,target.x-this.x);
-      this.angle+=Math.atan2(Math.sin(ta-this.angle),Math.cos(ta-this.angle))*16*dt;
-      if(this.cooldown<=0){
-        const fr=this.fireRate*bon.globalFireRate*(state.speedBoost?0.80:1);
-        const sx=this.x+Math.cos(this.angle)*15,sy=this.y+Math.sin(this.angle)*15;
-        const bd=this.damage*bon.globalDmg;
-        const cc=Math.min(0.95,this.critChance+bon.globalCrit);
-        const cm=this.critMult+bon.critMultBonus;
-        let dmg=bd,cl=0;
-        while(Math.random()<cc&&cl<this.maxMulticrit){cl++;dmg*=cm;}
-        state.projectiles.push(new Projectile(sx,sy,target,dmg,cl,this.def.color,this.def.special));
-        this.cooldown=fr;this.scale=1.18;
-      }
-    } else{this.angle+=dt*0.35;}
-  }
-  draw(ctx:CanvasRenderingContext2D,sel=false){
-    const col=this.def.color;
-    if(sel){
-      ctx.beginPath();ctx.arc(this.x,this.y,this.range,0,Math.PI*2);
-      ctx.fillStyle=`${col}07`;ctx.fill();
-      ctx.strokeStyle=`${col}30`;ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.stroke();ctx.setLineDash([]);
-    }
-    if(this.pulseRing>0){ctx.beginPath();ctx.arc(this.x,this.y,this.pulseRing,0,Math.PI*2);ctx.strokeStyle=`rgba(255,255,255,${(1-this.pulseRing/58)*0.8})`;ctx.lineWidth=2.5;ctx.stroke();}
-    ctx.save();ctx.translate(this.x,this.y);ctx.scale(this.scale,this.scale);
-    const gc=this.level>=5?'#c084fc':this.level>=3?'#fbbf24':this.def.glowColor;
-    ctx.shadowColor=gc;ctx.shadowBlur=10+this.level*1.5;
-    ctx.rotate(this.angle);ctx.fillStyle=col;
-    if(this.def.id==='cannon'){ctx.beginPath();ctx.roundRect(8,-4.5,17,9,3);ctx.fill();}
-    else if(this.def.id==='sniper'){ctx.beginPath();ctx.roundRect(6,-2.5,22,5,2);ctx.fill();ctx.beginPath();ctx.roundRect(6,-5,5,10,1);ctx.fill();}
-    else if(this.def.id==='rapid'){ctx.beginPath();ctx.roundRect(8,-5.5,14,4,2);ctx.fill();ctx.beginPath();ctx.roundRect(8,1.5,14,4,2);ctx.fill();}
-    else if(this.def.id==='frost'){ctx.beginPath();ctx.roundRect(8,-3.5,16,7,3.5);ctx.fill();}
-    else if(this.def.id==='mortar'){ctx.beginPath();ctx.roundRect(5,-6.5,10,13,3);ctx.fill();}
-    ctx.shadowBlur=0;
-    const bs=13;
-    ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.fillStyle=C.bg;
-    if(this.def.id==='frost'){ctx.beginPath();ctx.arc(0,0,bs,0,Math.PI*2);ctx.stroke();ctx.fill();}
-    else if(this.def.id==='sniper'){ctx.beginPath();ctx.roundRect(-bs,-bs,bs*2,bs*2,4);ctx.stroke();ctx.fill();}
-    else{ctx.beginPath();ctx.roundRect(-bs,-bs,bs*2,bs*2,7);ctx.stroke();ctx.fill();}
-    ctx.rotate(-this.angle);
-    ctx.fillStyle=this.level>=5?'#c084fc':this.level>=3?'#fbbf24':col;
-    ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
-    if(this.level>1)ctx.fillText(String(this.level),0,1);
-    else{ctx.beginPath();ctx.arc(0,0,2.5,0,Math.PI*2);ctx.fill();}
-    ctx.restore();
-  }
-}
-
-
-const TM_LABELS:Record<TargetMode,string>={first:'1er',last:'Dern.',strong:'Fort'};
-const TM_CYCLE:TargetMode[]=['first','last','strong'];
-
-const BRANCH_META=[
-  {id:'atk', label:'ATTAQUE',  color:'#ff4d6d', icon:Swords},
-  {id:'eco', label:'ÉCONOMIE', color:'#fbbf24', icon:Pickaxe},
-  {id:'def', label:'DÉFENSE',  color:'#4ade80', icon:Shield},
-  {id:'tech',label:'TECH',     color:'#60a5fa', icon:Settings},
-];
-
-function TalentModal({open,onClose,pts,unlocked,onUnlock}:{open:boolean;onClose:()=>void;pts:number;unlocked:Set<string>;onUnlock:(id:string)=>void;}){
-  const [selNode, setSelNode] = useState<any>(null);
-
-  if(!open)return null;
-
-  const handleConfirm = () => {
-    if(selNode) {
-      onUnlock(selNode.id);
-      setSelNode(null);
-    }
-  };
-
-  return(
-    <div className="absolute inset-0 z-[100] bg-[#0b0a16] flex flex-col overflow-hidden" style={{animation:'fadeIn 0.3s ease-out'}}>
-      {/* Background Glows */}
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-20">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#ff4d6d]/30 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#60a5fa]/30 blur-[120px] rounded-full" />
-      </div>
-
-      <div className="flex items-center justify-between px-6 pt-6 pb-2 shrink-0 relative z-10">
-        <div>
-          <h2 className="text-white font-black text-3xl tracking-tighter flex items-center gap-3">
-            TALENTS
-          </h2>
-          <p className="text-white/40 text-xs font-bold tracking-widest mt-1 uppercase">Évolution de la Séquence</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-2.5 flex items-center gap-2.5 shadow-2xl relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-tr from-[#fbbf24]/10 to-transparent pointer-events-none" />
-            <Star size={16} className="text-[#fbbf24] drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" fill="currentColor"/>
-            <span className="font-black text-[#fbbf24] text-sm tracking-tight">{pts} <span className="text-white/40 text-[10px] ml-0.5">PTS</span></span>
-          </div>
-          <button onClick={onClose} className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all active:scale-90">
-            <X size={22}/>
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-3 pb-24 relative z-10 custom-scrollbar flex flex-col">
-        {/* Branch grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-2 gap-y-6 py-2 flex-grow max-w-5xl mx-auto w-full">
-          {BRANCH_META.map(b => (
-            <div key={b.id} className="flex flex-col gap-6 items-center px-1">
-              {/* Branch Header */}
-              <div className="flex flex-col items-center gap-1 mb-1">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-0.5" style={{background:`${b.color}15`, border:`1px solid ${b.color}30`}}>
-                  <b.icon size={18} color={b.color} />
-                </div>
-                <div className="text-[10px] font-black tracking-[0.2em] text-center" style={{color:b.color}}>{b.label}</div>
-                <div className="w-8 h-0.5 rounded-full" style={{background:b.color, opacity:0.3}} />
-              </div>
-
-              {/* Branch Tiers */}
-              {[1,2,3].map(tier => {
-                const node = TALENT_TREE.find(t => t.branch === b.id && t.tier === tier)!;
-                const isUnlocked = unlocked.has(node.id);
-                const prereqMet = node.requires.every(r => unlocked.has(r));
-                const canUnlock = !isUnlocked && prereqMet && pts >= node.cost;
-                const isAvail = !isUnlocked && prereqMet;
-                const Icon = node.icon;
-
-                return (
-                  <div key={node.id} className="w-full flex flex-col items-center relative">
-                    {tier > 1 && (
-                      <div className="absolute top-[-24px] w-0.5 h-6 animate-pulse" style={{background:isUnlocked ? b.color : 'rgba(255,255,255,0.05)'}} />
-                    )}
-                    <button 
-                      onClick={() => !isUnlocked && isAvail && setSelNode(node)}
-                      className={`w-full flex flex-col items-center justify-center gap-1.5 py-4 px-1 rounded-[22px] border transition-all duration-300 relative overflow-hidden group
-                        ${isUnlocked ? 'scale-100' : 'scale-[0.98]'}
-                        ${isAvail ? 'active:scale-95 cursor-pointer shadow-lg' : 'cursor-default'}
-                        ${!isUnlocked && !prereqMet ? 'opacity-20 grayscale' : 'opacity-100'}
-                      `}
-                      style={{
-                        background: isUnlocked ? `${b.color}12` : 'rgba(255,255,255,0.02)',
-                        borderColor: isUnlocked ? b.color : isAvail ? `${b.color}30` : 'rgba(255,255,255,0.05)',
-                        boxShadow: isUnlocked ? `0 0 25px ${b.color}20` : 'none'
-                      }}
-                    >
-                      {/* Inner Glow for unlocked */}
-                      {isUnlocked && <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />}
-                      
-                      {/* Icon */}
-                      <div className={`p-2 rounded-xl mb-0.5 transition-all duration-500 ${isUnlocked ? 'bg-transparent' : 'bg-white/5'}`} style={{color: isUnlocked ? b.color : 'rgba(255,255,255,0.4)'}}>
-                        <Icon size={24} strokeWidth={isUnlocked ? 2.5 : 2} />
-                      </div>
-
-                      {/* Name & Desc */}
-                      <div className="flex flex-col items-center gap-1 px-1 relative z-10">
-                        <div className={`font-black text-[11px] text-center leading-[1.2] uppercase tracking-wide ${isUnlocked ? 'text-white' : 'text-white/40'}`}>
-                          {node.name}
-                        </div>
-                        {isUnlocked && (
-                          <div className="text-[9px] font-bold text-white/40 text-center leading-tight mt-0.5 px-1">
-                            {node.desc}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Badges (Top) */}
-                      {!isUnlocked && isAvail && (
-                        <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/40 border border-white/5 text-[7px] font-black z-20" style={{color: canUnlock ? '#fbbf24' : 'rgba(255,255,255,0.3)'}}>
-                          {node.cost}PT
-                        </div>
-                      )}
-
-                      {isUnlocked && (
-                        <div className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center shadow-lg" style={{background:b.color}}>
-                          <span className="text-[10px] font-black text-black">✓</span>
-                        </div>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* CONFIRMATION POPUP */}
-      {selNode && (
-        <div className="absolute inset-0 z-[110] bg-[#0b0a16]/90 backdrop-blur-xl flex items-center justify-center p-6" style={{animation:'fadeIn 0.2s ease-out'}}>
-          <div className="w-full max-w-[320px] bg-[#171626] border border-white/10 rounded-[32px] p-8 flex flex-col items-center shadow-2xl relative overflow-hidden" style={{animation:'scaleUp 0.3s cubic-bezier(0.22,1,0.36,1)'}}>
-            <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-10">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-white blur-[60px] rounded-full" />
-            </div>
-
-            <div className="w-20 h-20 rounded-3xl mb-6 flex items-center justify-center" 
-              style={{background:`${BRANCH_META.find(b=>b.id===selNode.branch)?.color}15`, border:`1px solid ${BRANCH_META.find(b=>b.id===selNode.branch)?.color}30`, color:BRANCH_META.find(b=>b.id===selNode.branch)?.color}}>
-              <selNode.icon size={44} strokeWidth={2.5} />
-            </div>
-
-            <h3 className="text-white font-black text-2xl uppercase tracking-tighter mb-2 text-center">{selNode.name}</h3>
-            <p className="text-white/40 text-[13px] font-bold text-center leading-relaxed mb-8 px-2">{selNode.desc}</p>
-
-            <div className="flex flex-col gap-3 w-full">
-              <button 
-                onClick={handleConfirm}
-                disabled={pts < selNode.cost}
-                className={`w-full py-4 rounded-2xl font-black tracking-[.2em] transition-all active:scale-95 flex items-center justify-center gap-2
-                ${pts >= selNode.cost ? 'bg-[#fbbf24] text-black shadow-[0_0_30px_rgba(251,191,36,0.3)]' : 'bg-white/5 text-white/20 border border-white/5 cursor-not-allowed'}`}>
-                {pts < selNode.cost && <LockIcon size={16} />}
-                {pts >= selNode.cost ? `DÉVERROUILLER (${selNode.cost}PT)` : `PT INSUFFISANTS (${selNode.cost}PT)`}
-              </button>
-              
-              <button 
-                onClick={() => setSelNode(null)}
-                className="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-white/40 font-black tracking-[.2em] active:scale-95 transition-all">
-                RETOUR
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {unlocked.size > 0 && (
-        <div className="px-6 py-6 bg-white/[0.02] border-t border-white/5 shrink-0 relative z-10">
-          <div className="text-white/20 text-[10px] font-black tracking-[0.3em] uppercase mb-4 text-center">Protocoles Actifs</div>
-          <div className="flex flex-wrap justify-center gap-2">
-            {Array.from(unlocked).map(id => {
-              const node = TALENT_TREE.find(t => t.id === id)!;
-              const bm = BRANCH_META.find(b => b.id === node.branch)!;
-              return (
-                <div key={id} className="flex items-center gap-2 px-4 py-2 rounded-2xl text-[11px] font-black shadow-xl backdrop-blur-md"
-                  style={{background: `${bm.color}15`, color: bm.color, border: `1px solid ${bm.color}30`}}>
-                  <node.icon size={14} />
-                  {node.name.toUpperCase()}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+import { 
+  CW, CH, C, TOWER_TYPES, TALENT_TREE, computeBonuses, getLevelData, pickRewards, TM_CYCLE, TM_LABELS, INITIAL_LEVELS,
+  type TalentBonuses, type Reward
+} from './game/constants';
+import { FloatingText, Particle, RingBurst, AoeBlast } from './game/entities/effects';
+import { Projectile } from './game/entities/Projectile';
+import { Enemy } from './game/entities/Enemy';
+import { Tower } from './game/entities/Tower';
+import TalentModal from './ui/TalentModal';
+import SettingsModal from './ui/SettingsModal';
+import IntroScreen from './ui/IntroScreen';
+import { setMasterVolume } from './game/utils/audio';
+import { GameAPI } from './game/api';
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App(){
   const canvasRef=useRef<HTMLCanvasElement>(null);
-  const [diamonds,setDiamonds]=useState(80);
-  const dRef=useRef(80);
+  const [diamonds,setDiamonds]=useState(100);
+  const dRef=useRef(100);
   const setDia=useCallback((v:number|((p:number)=>number))=>{
     setDiamonds(prev=>{const n=typeof v==='function'?v(prev):v;dRef.current=n;return n;});
   },[]);
@@ -619,6 +30,87 @@ export default function App(){
   const [talentPoints,setTalentPoints]=useState(0);
   const [showTalents,setShowTalents]=useState(false);
   const [showPauseModal,setShowPauseModal]=useState(false);
+  const [showIntro, setShowIntro] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [maxLevelUnlocked, setMaxLevelUnlocked] = useState(1);
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem('pt_settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setMasterVolume(parsed.volume);
+      return parsed;
+    }
+    return { volume: 0.5, effects: true, bloom: true };
+  });
+
+  // Cloud Sync Logic
+  const syncWithCloud = useCallback(async () => {
+    const tid = GameAPI.getTerminalId();
+    const data = {
+      terminalId: tid,
+      diamonds,
+      talentPoints,
+      maxLevelUnlocked,
+      unlockedTalents: Array.from(unlockedTalents)
+    };
+    await GameAPI.syncProgress(data);
+  }, [diamonds, talentPoints, maxLevelUnlocked, unlockedTalents]);
+
+  // Persistence: Load
+  useEffect(() => {
+    const loadAll = async () => {
+      // Local load first
+      const s_dia = localStorage.getItem('pt_diamonds');
+      if (s_dia) { setDia(Number(s_dia)); dRef.current = Number(s_dia); }
+      const s_talents = localStorage.getItem('pt_talents');
+      if (s_talents) {
+        try {
+          const parsed = JSON.parse(s_talents);
+          setUnlockedTalents(new Set(parsed));
+          bonusesRef.current = computeBonuses(new Set(parsed));
+        } catch(e) {}
+      }
+      const s_pts = localStorage.getItem('pt_talent_points');
+      if (s_pts) setTalentPoints(Number(s_pts));
+      const s_maxLvl = localStorage.getItem('pt_max_level');
+      if (s_maxLvl) setMaxLevelUnlocked(Number(s_maxLvl));
+      const s_custom = localStorage.getItem('pt_custom_levels');
+      if (s_custom) {
+        try { setCustomLevels(JSON.parse(s_custom)); } catch(e) {}
+      }
+
+      // Cloud attempt
+      const tid = GameAPI.getTerminalId();
+      const cloudData = await GameAPI.loadProgress(tid);
+      if (cloudData) {
+        setDia(cloudData.diamonds);
+        setTalentPoints(cloudData.talentPoints);
+        setMaxLevelUnlocked(cloudData.maxLevelUnlocked);
+        setUnlockedTalents(new Set(cloudData.unlockedTalents));
+        bonusesRef.current = computeBonuses(new Set(cloudData.unlockedTalents));
+        if (cloudData.customLevels) {
+          const levels: any = {};
+          cloudData.customLevels.forEach((l: any) => { levels[l.levelNumber] = l.data; });
+          setCustomLevels(prev => ({ ...prev, ...levels }));
+        }
+      }
+    };
+    loadAll();
+  }, [setDia]);
+
+  // Persistence: Save
+  useEffect(() => {
+    if (!showIntro) {
+      localStorage.setItem('pt_diamonds', String(diamonds));
+      localStorage.setItem('pt_talents', JSON.stringify(Array.from(unlockedTalents)));
+      localStorage.setItem('pt_talent_points', String(talentPoints));
+      localStorage.setItem('pt_max_level', String(maxLevelUnlocked));
+    }
+    
+    // Throttled cloud sync
+    const timer = setTimeout(syncWithCloud, 2000);
+    return () => clearTimeout(timer);
+  }, [diamonds, unlockedTalents, talentPoints, maxLevelUnlocked, showIntro, syncWithCloud]);
   const [isInMenu,setIsInMenu]=useState(true);
   const [isInEditor,setIsInEditor]=useState(false);
   const [customLevels, setCustomLevels] = useState<Record<number, any>>({});
@@ -646,7 +138,6 @@ export default function App(){
   const [uiState,setUiState]=useState({level:1,wave:1,maxWaves:4,status:'idle',baseHp:10,kills:0,enemiesLeft:0,totalEnemies:0,bossHp:0,bossMaxHp:0,bossPoints:0});
   const [activeBuffs,setActiveBuffs]=useState({freeUpgrade:false,speedBoost:false,goldRush:false,towerDiscount:false});
   const [autoCountdown,setAutoCountdown]=useState(0);
-  const [autoWaveMax,setAutoMax]=useState(10); // Added autoWaveMax state
 
   const gs=useRef<any>({
     lastTime:0,speedMultiplier:1,shakeTime:0,flashAlpha:0,
@@ -665,25 +156,31 @@ export default function App(){
       baseHp:s.baseHp,kills:s.kills,enemiesLeft:left,totalEnemies:s.totalWaveEnemies,
       bossHp:boss?boss.hp:0,bossMaxHp:boss?boss.maxHp:0,bossPoints:s.bossPoints||0});
     setAutoCountdown(s.status==='idle'?Math.ceil(s.autoWaveTimer):0);
-    setAutoMax(s.autoWaveMax||10);
   },[]);
 
   // Initialize slots based on level
   const initLevel = useCallback((lvl: number) => {
     const s = gs.current;
-    if (lvl === 1) {
-      s.path = [{x:200,y:70},{x:200,y:675}];
-      s.slots = [
-        {id:1,x:106,y:325,r:16,tower:null,side:'left'},{id:2,x:106,y:462,r:16,tower:null,side:'left'},
-        {id:3,x:106,y:590,r:16,tower:null,side:'left'},{id:4,x:294,y:288,r:16,tower:null,side:'right'},
-        {id:5,x:294,y:425,r:16,tower:null,side:'right'},{id:6,x:294,y:555,r:16,tower:null,side:'right'},
-      ];
-    } else if (customLevels[lvl]) {
-      s.slots = customLevels[lvl].slots.map((sl: any) => ({ ...sl, tower: null }));
-      s.path = customLevels[lvl].path || [{x:200,y:70},{x:200,y:675}];
+    s.level = lvl;
+    s.enemies = [];
+    s.projectiles = [];
+    s.particles = [];
+    s.floatingTexts = [];
+    s.rings = [];
+    s.aoeBlasts = [];
+    s.orbParticles = [];
+    s.wave = 1;
+    s.status = 'idle';
+    
+    // Check custom levels first, then initial levels, then procedural
+    const lvlConfig = customLevels[lvl] || INITIAL_LEVELS[lvl];
+    
+    if (lvlConfig) {
+      s.path = lvlConfig.path || [{x:200,y:70},{x:200,y:675}];
+      s.slots = lvlConfig.slots.map((sl: any) => ({ ...sl, tower: null }));
     } else {
-      s.path = [{x:200,y:70},{x:200,y:675}];
-      // Default for high levels if no custom config
+      // Procedural fallback for levels > Max
+      s.path = [{x:200,y:70},{x:200,y:750}];
       s.slots = [
         {id:1,x:106,y:250,r:16,tower:null,side:'left'}, {id:2,x:294,y:250,r:16,tower:null,side:'right'},
         {id:3,x:106,y:400,r:16,tower:null,side:'left'}, {id:4,x:294,y:400,r:16,tower:null,side:'right'},
@@ -711,8 +208,22 @@ export default function App(){
     return () => { audio.pause(); audio.src = ''; };
   }, []);
   useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        bgMusicRef.current?.pause();
+        import('./game/utils/audio').then(m => m.audioCtx.suspend());
+      } else if (!isInMenu && !showPauseModal) {
+        bgMusicRef.current?.play().catch(() => {});
+        import('./game/utils/audio').then(m => m.audioCtx.resume());
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [isInMenu, showPauseModal]);
+
+  useEffect(() => {
     if (bgMusicRef.current) {
-      if (!isInMenu && !showPauseModal) bgMusicRef.current.play().catch(()=>{});
+      if (!isInMenu && !showPauseModal && !document.hidden) bgMusicRef.current.play().catch(()=>{});
       else bgMusicRef.current.pause();
     }
   }, [isInMenu, showPauseModal]);
@@ -720,7 +231,20 @@ export default function App(){
   useEffect(()=>{
     const canvas=canvasRef.current;if(!canvas)return;
     const ctx=canvas.getContext('2d')!;let raf:number;
-    const spawnOrb=(s:any)=>{const a=Math.random()*Math.PI*2,r=10+Math.random()*16;s.orbParticles.push({x:200+Math.cos(a)*r,y:662+Math.sin(a)*r*0.35,vx:(Math.random()-0.5)*12,vy:-8-Math.random()*18,life:1.0,size:2+Math.random()*3.5,hue:160+Math.random()*40});};
+    const spawnOrb=(s:any)=>{
+      if(!s.path.length) return;
+      const last = s.path[s.path.length - 1];
+      const a=Math.random()*Math.PI*2,r=10+Math.random()*16;
+      s.orbParticles.push({
+        x:last.x+Math.cos(a)*r,
+        y:last.y+Math.sin(a)*r*0.35,
+        vx:(Math.random()-0.5)*12,
+        vy:-8-Math.random()*18,
+        life:1.0,
+        size:2+Math.random()*3.5,
+        hue:160+Math.random()*40
+      });
+    };
 
     const drawScene=(ts:number)=>{
       const state=gs.current;
@@ -803,11 +327,15 @@ export default function App(){
       ctx.restore();
       // orb particles
       ctx.globalCompositeOperation='screen';
-      state.orbParticles.forEach((p:any)=>{
-        ctx.globalAlpha=p.life*0.7;ctx.shadowColor=`hsl(${p.hue},90%,65%)`;ctx.shadowBlur=6;
-        ctx.fillStyle=`hsl(${p.hue},90%,72%)`;ctx.beginPath();ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);ctx.fill();
-      });
-      ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;ctx.shadowBlur=0;
+      ctx.globalCompositeOperation='screen';
+      state.projectiles.forEach((p:any)=>p.draw(ctx));
+      state.aoeBlasts.forEach((b:any)=>b.draw(ctx));
+      state.particles.forEach((p:any)=>p.draw(ctx));
+      ctx.globalCompositeOperation='source-over';
+
+      state.rings.forEach((r:any)=>r.draw(ctx));
+      state.floatingTexts.forEach((t:any)=>t.draw(ctx,ts));
+
       const sid=selSlotIdRef.current;
       state.slots.forEach((slot:any)=>{
         if(slot.tower){slot.tower.draw(ctx,sid===slot.id,bonusesRef.current.sellRatio);}
@@ -821,7 +349,17 @@ export default function App(){
           ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=1.5;ctx.stroke();
         }
       });
+
       ctx.restore();
+
+      // Final Bloom Overlay (Global)
+      if(state.waveActive && settings.bloom) {
+        ctx.globalAlpha = 0.05 + Math.sin(ts*0.002)*0.02;
+        ctx.fillStyle = '#00f5c4';
+        ctx.fillRect(0,0,CW,CH);
+        ctx.globalAlpha = 1;
+      }
+
       if(state.flashAlpha>0){ctx.globalAlpha=state.flashAlpha;const fg=ctx.createRadialGradient(CW/2,CH,0,CW/2,CH/2,CH);fg.addColorStop(0,'rgba(255,50,50,0.6)');fg.addColorStop(1,'rgba(255,0,0,0)');ctx.fillStyle=fg;ctx.fillRect(0,0,CW,CH);ctx.globalAlpha=1;}
       const vg=ctx.createRadialGradient(CW/2,CH/2,CW*0.28,CW/2,CH/2,CW*0.85);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.5)');ctx.fillStyle=vg;ctx.fillRect(0,0,CW,CH);
     };
@@ -872,8 +410,8 @@ export default function App(){
       }
       state.speedBoost=speedBoostRef.current;
       state.goldRush=goldRushRef.current;
-      // Auto-wave countdown when idle
-      if(state.status==='idle'){
+      // Auto-wave countdown when idle (but not for wave 1)
+      if(state.status==='idle' && state.wave > 1){
         if(state.autoWaveTimer>0){
           state.autoWaveTimer-=dt;
           const prevCeil=Math.ceil(state.autoWaveTimer+dt);
@@ -882,7 +420,7 @@ export default function App(){
           if(state.autoWaveTimer<=0){
             // Auto-launch wave
             const ld=getLevelData(state.level);const isBoss=state.wave===ld.waves;
-            const total=isBoss?1:ld.baseMobs+state.wave*ld.mobMult;
+            const total=isBoss?1:Math.floor(ld.baseMobs+state.wave*ld.mobMult);
             state.enemiesToSpawn=total;state.totalWaveEnemies=total;
             state.spawnTimer=0;state.waveActive=true;state.status='playing';state.autoWaveTimer=0;
             setAutoCountdown(0);
@@ -895,7 +433,11 @@ export default function App(){
       state.slots.forEach((slot:any)=>{if(slot.tower)slot.tower.update(dt,state,bon);});
       state.projectiles=state.projectiles.filter((p:Projectile)=>!p.update(dt,state,addDia,bon));
       state.floatingTexts=state.floatingTexts.filter((t:FloatingText)=>!t.update(dt));
-      state.particles=state.particles.filter((p:Particle)=>!p.update(dt));
+      if (settings.effects) {
+        state.particles=state.particles.filter((p:Particle)=>!p.update(dt));
+      } else {
+        state.particles = [];
+      }
       state.rings=state.rings.filter((r:RingBurst)=>!r.update(dt));
       state.aoeBlasts=state.aoeBlasts.filter((b:AoeBlast)=>!b.update(dt));
       if(ns)syncUI();
@@ -976,12 +518,15 @@ export default function App(){
     setLevelRewards([]);
     setSelectedRewardId(null);
     state.level++;
+    if (state.level > maxLevelUnlocked) {
+      setMaxLevelUnlocked(state.level);
+    }
     initLevel(state.level);
     state.wave = 1;
     state.status = 'idle';
-    state.autoWaveTimer = 12;
+    state.autoWaveTimer = 10;
     syncUI();
-  }, [syncUI, initLevel]);
+  }, [syncUI, initLevel, maxLevelUnlocked]);
 
   const cycleTarget=useCallback(()=>{
     if(selSlotId===null)return;const slot=gs.current.slots.find((s:any)=>s.id===selSlotId);if(!slot?.tower)return;
@@ -996,26 +541,19 @@ export default function App(){
       const mh=10+bonusesRef.current.bonusHp;state.baseHp=mh;
       state.level=1;state.wave=1;state.kills=0;state.flashAlpha=0;
       state.slots.forEach((s:any)=>s.tower=null);state.status='idle';state.autoWaveTimer=0;
-      setDia(80);setIsPlaying(true);isPlayingRef.current=true;setGameSpeed(1);
-      setTalentPoints(0);setUnlockedTalents(new Set());bonusesRef.current=computeBonuses(new Set());
-      freeUpgradeRef.current=false;goldRushRef.current=false;speedBoostRef.current=false;towerDiscountRef.current=false;
-      setActiveBuffs({freeUpgrade:false,speedBoost:false,goldRush:false,towerDiscount:false});
+      setDia(100);setIsPlaying(true);isPlayingRef.current=true;setGameSpeed(1);
+      // Don't reset talents on Level Replay if user just want to retry
       setShowPauseModal(false);
+      initLevel(state.level);
       syncUI();
     } else if(state.status==='idle'){
       const ld=getLevelData(state.level);const isBoss=state.wave===ld.waves;
-      const total=isBoss?1:ld.baseMobs+state.wave*ld.mobMult;
+      const total=isBoss?1:Math.floor(ld.baseMobs+state.wave*ld.mobMult);
       state.enemiesToSpawn=total;state.totalWaveEnemies=total;
       state.spawnTimer=0;state.waveActive=true;state.status='playing';
-      // Early bird bonus: proportional to time remaining
-      const timeLeft=state.autoWaveTimer;
-      state.autoWaveTimer=0;
-      setAutoCountdown(0);
-      if(timeLeft>1){
-        const maxT=autoWaveMax; // Use the state variable here
-        const bonus=timeLeft/maxT>0.7?5:timeLeft/maxT>0.4?3:1;
-        addDia(bonus);
-        state.floatingTexts.push(new FloatingText(200,380,`+${bonus}♦ Rapide!`,0,'#4ade80'));
+      if(state.autoWaveTimer>0){
+        addDia(5);
+        state.floatingTexts.push(new FloatingText(200,380,"+5♦ Manuel!",0,'#4ade80'));
       }
       setIsPlaying(true);isPlayingRef.current=true;
       setWaveAnnounce({text:isBoss?'⚠ BOSS':`Vague ${state.wave}/${ld.waves}`});
@@ -1048,54 +586,85 @@ export default function App(){
   const SL=['DMG','SPD','RNG','CRIT'];
   const SC=['#f87171','#fbbf24','#22c55e','#c084fc'];
 
-  if(isInMenu){
-    return <MainMenu 
-      onPlay={()=>{setIsInMenu(false); initLevel(1); syncUI();}} 
-      onOpenEditor={()=>{setIsInMenu(false);setIsInEditor(true);}}
-    />;
-  }
+  return (
+    <div className="flex justify-center items-center w-full bg-black select-none overflow-hidden touch-none" style={{ height: '100dvh' }}>
+      <AnimatePresence>
+        {showIntro && (
+          <IntroScreen key="intro" onComplete={() => setShowIntro(false)} />
+        )}
+      </AnimatePresence>
 
-  if(isInEditor) {
-    return <LevelEditor 
-      onBack={() => { setIsInEditor(false); setIsInMenu(true); }} 
-      onSave={(config) => {
-        setCustomLevels(prev => ({ ...prev, 2: config }));
-      }}
-      onTest={(config) => {
-        setCustomLevels(prev => ({ ...prev, 2: config }));
-        const s = gs.current;
-        s.level = 2;
-        s.slots = config.slots.map((sl: any) => ({ ...sl, id: sl.id, x: sl.x, y: sl.y, r: 16, tower: null, side: sl.side }));
-        s.path = config.path;
-        s.wave = 1;
-        s.status = 'idle';
-        s.baseHp = 10 + bonusesRef.current.bonusHp;
-        s.enemies = []; s.projectiles = []; s.particles = []; s.floatingTexts = []; s.rings = []; s.aoeBlasts = []; s.orbParticles = [];
-        s.lastTime = 0;
-        setIsInEditor(false);
-        setIsInMenu(false);
-        setIsPlaying(true);
-        isPlayingRef.current = true;
-        syncUI();
-      }}
-    />;
-  }
+      {isInMenu ? (
+        <MainMenu
+          onPlay={() => { 
+            setIsInMenu(false); 
+            if (uiState.level === 1 && diamonds < 100) setDia(100);
+            initLevel(uiState.level); 
+            syncUI(); 
+          }}
+          onSelectLevel={(lvl) => {
+            setIsInMenu(false);
+            setDia(100); // Reset budget when picking a level manually
+            initLevel(lvl);
+            syncUI();
+          }}
+          maxLevelUnlocked={maxLevelUnlocked}
+          currentLevel={uiState.level}
+          onOpenEditor={() => { setIsInMenu(false); setIsInEditor(true); }}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+      ) : isInEditor ? (
+        <LevelEditor
+          onBack={() => { setIsInEditor(false); setIsInMenu(true); }}
+          initialLevelId={uiState.level}
+          initialConfig={customLevels[uiState.level] || INITIAL_LEVELS[uiState.level]}
+          customLevels={customLevels}
+          onSave={(lvlId, config) => {
+            setCustomLevels(prev => {
+              const next = { ...prev, [lvlId]: config };
+              localStorage.setItem('pt_custom_levels', JSON.stringify(next));
+              GameAPI.saveCustomLevel(GameAPI.getTerminalId(), lvlId, config);
+              return next;
+            });
+          }}
+          onTest={(config) => {
+            // Save before test to ensure consistency
+            setCustomLevels(prev => {
+              const next = { ...prev, [uiState.level]: config };
+              localStorage.setItem('pt_custom_levels', JSON.stringify(next));
+              return next;
+            });
+            // Test current level
+            const s = gs.current;
+            s.slots = config.slots.map((sl: any) => ({ ...sl, id: sl.id, x: sl.x, y: sl.y, r: 16, tower: null, side: sl.side }));
+            s.path = config.path;
+            s.wave = 1;
+            s.status = 'idle';
+            s.baseHp = 10 + bonusesRef.current.bonusHp;
+            s.enemies = []; s.projectiles = []; s.particles = []; s.floatingTexts = []; s.rings = []; s.aoeBlasts = []; s.orbParticles = [];
+            s.lastTime = 0;
+            setIsInMenu(false);
+            setIsInEditor(false); // Stop editing to test
+            setIsPlaying(true);
+            isPlayingRef.current = true;
+            syncUI();
+          }}
+        />
+      ) : (
+        <div className="w-full h-full">
+          <style>{`
+            @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap');
 
-  return(
-    <div className="flex justify-center items-center w-full bg-black select-none overflow-hidden touch-none" style={{height:'100dvh'}}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap');
-
-        :root {
-          --teal: #00f5c4;
-          --teal-dim: rgba(0,245,196,0.12);
-          --teal-border: rgba(0,245,196,0.25);
-          --red: #ff3d5a;
-          --gold: #f5b800;
-          --purple: #9d72ff;
-          --panel: rgba(4,8,20,0.92);
-          --panel-border: rgba(0,245,196,0.18);
-        }
+            :root {
+              --teal: #00f5c4;
+              --teal-dim: rgba(0,245,196,0.12);
+              --teal-border: rgba(0,245,196,0.25);
+              --red: #ff3d5a;
+              --gold: #f5b800;
+              --purple: #9d72ff;
+              --panel: rgba(4,8,20,0.92);
+              --panel-border: rgba(0,245,196,0.18);
+            }
 
         .gf { font-family: 'Orbitron', monospace; }
         .mf { font-family: 'IBM Plex Mono', monospace; }
@@ -1278,7 +847,6 @@ export default function App(){
                 </div>
                 <div className="text-[7px] font-bold text-white/20 tracking-widest uppercase">KILLS</div>
               </div>
-              
               <button onClick={()=>setShowTalents(true)} 
                 className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 relative
                   ${talentPoints > 0 ? 'bg-[#ff4d6d]/10 border border-[#ff4d6d]/40' : 'bg-white/5 border border-white/10'}`}>
@@ -1327,12 +895,12 @@ export default function App(){
 
           {/* SHOP CONSOLE */}
           {shopSlot&&uiState.status!=='game_over'&&(
-            <div className="si absolute inset-x-0 bottom-0 z-40 shop-console pb-24 overflow-hidden" style={{animation:'slideUp 0.3s cubic-bezier(0.22,1,0.36,1)'}}>
+            <div className="si absolute inset-x-0 bottom-0 z-40 shop-console pb-6 overflow-hidden" style={{animation:'slideUp 0.3s cubic-bezier(0.22,1,0.36,1)'}}>
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/[0.02]">
+              <div className="flex items-center justify-between px-5 py-2.5 border-b border-white/5 bg-white/[0.02]">
                 <div className="flex flex-col">
-                  <div className="text-white font-black text-sm tracking-widest uppercase">BAIE_DE_CONSTRUCTION</div>
-                  <div className="text-white/30 text-[9px] mf uppercase tracking-widest">Emplacement {shopSlot.side==='left'?'ALPHA':'BETA'}</div>
+                  <div className="text-[#00f5c4] font-black text-[11px] tracking-[0.2em] uppercase">LOGISTIQUE DE DÉFENSE</div>
+                  <div className="text-white/20 text-[8px] mf uppercase tracking-widest mt-0.5">Secteur {shopSlot.side==='left'?'ALPHA':'BETA'} // Acquisition</div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex flex-col items-end leading-none">
@@ -1351,15 +919,15 @@ export default function App(){
                   const ok=diamonds>=def.cost;
                   const Icon = def.icon;
                   return(<button key={def.id} onClick={()=>ok&&buyTower(def.id)}
-                    className={`flex flex-col items-center py-5 px-1 gap-2.5 transition-all relative group pointer-events-auto
+                    className={`flex flex-col items-center py-3 px-1 gap-1.5 transition-all relative group pointer-events-auto
                       ${ok ? 'tower-card ok' : 'opacity-20 cursor-not-allowed'}`}>
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all
                       ${ok ? 'bg-white/5 group-hover:bg-white/10' : 'bg-black/20'}`} style={{color: ok ? def.color : 'white'}}>
-                      <Icon size={24} />
+                      <Icon size={20} />
                     </div>
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="text-white font-black text-[9px] tracking-tighter text-center uppercase leading-tight">{def.name}</div>
-                      <div className="mf font-black text-[10px]" style={{color:ok?C.diamond:'rgba(255,255,255,0.2)'}}>{def.cost}♦</div>
+                    <div className="flex flex-col items-center">
+                      <div className="text-white font-black text-[8px] tracking-tighter text-center uppercase leading-tight">{def.name}</div>
+                      <div className="mf font-black text-[9px]" style={{color:ok?C.diamond:'rgba(255,255,255,0.2)'}}>{def.cost}♦</div>
                     </div>
                     
                     {/* Tooltip Hover Overlay */}
@@ -1562,6 +1130,7 @@ export default function App(){
             </div>
           )}
         </div>
+      </div>
 
         {/* Active buff indicators */}
         {(activeBuffs.freeUpgrade||activeBuffs.speedBoost||activeBuffs.goldRush||activeBuffs.towerDiscount)&&(
@@ -1573,7 +1142,6 @@ export default function App(){
           </div>
         )}
 
-        {/* FOOTER */}
         <div className="absolute bottom-0 w-full px-4 pb-4 flex justify-between items-center z-20 pointer-events-none">
           <div className="flex items-center gap-2 pointer-events-auto">
             <button onClick={()=>{setIsPlaying(false);isPlayingRef.current=false;setShowPauseModal(true);}}
@@ -1587,7 +1155,8 @@ export default function App(){
             </button>
           </div>
 
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-12 pointer-events-auto">
+          {/* DIAMONDS */}
+          <div className="flex items-center gap-2 pointer-events-auto">
             <div className="relative group active:scale-90 transition-transform cursor-default">
               <div className="w-16 h-16 bg-[#fbbf24] rotate-45 rounded-xl shadow-[0_0_30px_rgba(251,191,36,0.3)] flex items-center justify-center border-4 border-[#0b0a16]">
                 <div className="-rotate-45 mf text-xl font-black text-[#0b0a16]">{diamonds}</div>
@@ -1606,12 +1175,27 @@ export default function App(){
 
             {/* BOUTON VAGUE */}
             <button onClick={handleAction} disabled={uiState.status==='playing'}
-              className="w-16 h-16 rounded-[20px] bg-[#171626] border border-white/10 flex flex-col items-center justify-center pointer-events-auto active:scale-95 transition-all shadow-xl">
-              <div className="text-[7px] font-black text-white/30 tracking-widest mb-1">VAGUE</div>
-              <div className="mf text-base font-black text-white">{uiState.wave}/{uiState.maxWaves}</div>
+              className={`w-16 h-16 rounded-[24px] bg-[#171626] border relative flex flex-col items-center justify-center pointer-events-auto active:scale-95 transition-all shadow-2xl overflow-hidden
+                ${uiState.status==='playing' ? 'border-white/5 opacity-50' : 'border-white/15'}`}>
+              
+              {uiState.status==='idle' && autoCountdown > 0 ? (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <div className={`mf font-black text-xl transition-colors duration-300 ${autoCountdown <= 3 ? 'text-[#ff3d5a] count-urgent' : 'text-[#22c55e]'}`}>
+                    {autoCountdown}s
+                  </div>
+                  <div className="text-[6px] font-black text-white/20 tracking-[0.2em] uppercase mt-0.5">AUTO_WAVE</div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <div className="text-[7px] font-black text-white/30 tracking-widest mb-1 uppercase">Vague</div>
+                  <div className="mf text-base font-black text-white">{uiState.wave}/{uiState.maxWaves}</div>
+                </div>
+              )}
+
+              {/* Progress Ring or Background Fill for Countdown */}
               {uiState.status==='idle' && autoCountdown > 0 && (
-                <div className="absolute -bottom-1 w-full text-center">
-                  <span className="text-[8px] font-black text-[#22c55e] bg-[#0b0a16] px-1 rounded">{autoCountdown}s</span>
+                <div className="absolute inset-0 z-0 pointer-events-none opacity-10">
+                  <div className="absolute inset-0 bg-white" style={{ transform: `translateY(${(autoCountdown/10)*100}%)`, transition: 'transform 1s linear' }} />
                 </div>
               )}
             </button>
@@ -1634,17 +1218,34 @@ export default function App(){
                   className="w-full py-5 rounded-2xl bg-[#00f5c4] text-[#0b0a16] font-black tracking-[0.2em] active:scale-95 transition-all shadow-[0_0_30px_rgba(0,245,196,0.3)]">
                   REPRENDRE
                 </button>
+                <button onClick={() => setShowSettings(true)} 
+                  className="w-full py-4 rounded-xl bg-white/5 border border-white/10 text-white font-bold tracking-widest active:scale-95 transition-all hover:bg-white/10">
+                  RÉGLAGES
+                </button>
                 <div className="h-px w-full bg-white/5 my-2" />
                 <button onClick={() => { setShowPauseModal(false); setIsInMenu(true); }} 
                   className="w-full py-4 rounded-xl bg-white/5 border border-white/10 text-white/60 font-bold tracking-widest active:scale-95 transition-all hover:bg-white/10 hover:text-white">
                   QUITTER LE JEU
                 </button>
               </div>
-              <p className="mt-8 mf text-[10px] text-white/20 tracking-[0.3em] uppercase">Session Active // ID-PX01</p>
+              <p className="mt-8 mf text-[10px] text-white/20 tracking-[0.3em] uppercase">Session Active - ID-PX01</p>
             </div>
           </div>
         )}
       </div>
+    )}
+
+    {showSettings && (
+      <SettingsModal 
+        settings={settings} 
+        onClose={() => setShowSettings(false)} 
+        onUpdate={(s) => {
+          setSettings(s);
+          setMasterVolume(s.volume);
+          localStorage.setItem('pt_settings', JSON.stringify(s));
+        }} 
+      />
+    )}
     </div>
   );
 }

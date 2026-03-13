@@ -8,17 +8,17 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Tower Defense',
-        short_name: 'TD',
+        name: 'Proxy Tower',
+        short_name: 'Proxy Tower',
         theme_color: '#040810',
         background_color: '#040810',
         display: 'standalone',
         orientation: 'portrait',
         icons: [
           {
-            src: '/vite.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
+            src: '/icone/pwa.png',
+            sizes: '512x512',
+            type: 'image/png',
             purpose: 'any maskable'
           }
         ]
