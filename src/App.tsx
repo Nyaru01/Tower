@@ -539,10 +539,9 @@ export default function App(){
     if(state.status==='game_over'){
       state.enemies=[];state.projectiles=[];state.particles=[];state.floatingTexts=[];state.rings=[];state.aoeBlasts=[];state.orbParticles=[];
       const mh=10+bonusesRef.current.bonusHp;state.baseHp=mh;
-      state.level=1;state.wave=1;state.kills=0;state.flashAlpha=0;
+      state.wave=1;state.kills=0;state.flashAlpha=0;
       state.slots.forEach((s:any)=>s.tower=null);state.status='idle';state.autoWaveTimer=0;
       setDia(100);setIsPlaying(true);isPlayingRef.current=true;setGameSpeed(1);
-      // Don't reset talents on Level Replay if user just want to retry
       setShowPauseModal(false);
       initLevel(state.level);
       syncUI();
@@ -1046,10 +1045,15 @@ export default function App(){
                 <div className="bg-[#171626] px-4 py-2 rounded-2xl border border-[#252438] flex items-center gap-1.5"><Skull size={12} color="#a78bfa"/><span className="mf text-[#a78bfa] text-sm">{uiState.kills}</span></div>
                 <div className="bg-[#171626] px-4 py-2 rounded-2xl border border-[#252438] flex items-center gap-1.5"><Trophy size={12} color="#fbbf24"/><span className="mf text-[#fbbf24] text-sm">Niv.{uiState.level}</span></div>
               </div>
-              <button onClick={handleAction} className="bg-[#22c55e] text-[#0b0a16] px-14 py-4 rounded-2xl font-black text-lg active:scale-95 transition-transform shadow-[0_0_50px_rgba(34,197,94,0.35)] hover:bg-[#16a34a] pointer-events-auto">
-                REJOUER
-              </button>
-              <p className="text-white/18 text-[10px] mt-4">Les talents seront réinitialisés</p>
+              <div className="flex flex-col gap-3 w-full max-w-[280px]">
+                <button onClick={handleAction} className="w-full bg-[#22c55e] text-[#0b0a16] py-4 rounded-2xl font-black text-lg active:scale-95 transition-transform shadow-[0_0_40px_rgba(34,197,94,0.25)] hover:bg-[#16a34a] pointer-events-auto">
+                  RECOMMENCER
+                </button>
+                <button onClick={() => setIsInMenu(true)} className="w-full bg-white/5 border border-white/10 text-white/60 py-4 rounded-2xl font-black text-lg active:scale-95 transition-all hover:bg-white/10 pointer-events-auto">
+                  RETOURNER AU MENU
+                </button>
+              </div>
+              <p className="text-white/18 text-[10px] mt-6">La vague sera réinitialisée</p>
             </div>
           )}
 

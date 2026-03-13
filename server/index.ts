@@ -30,8 +30,10 @@ async function initDatabase() {
   try {
     // Try to push schema (non-blocking for server start)
     console.log('🐘 [SERVER] Running prisma db push...');
+    const schemaPath = path.resolve(__dirname, '../prisma/schema.prisma');
+    console.log(`📜 [SERVER] Schema path: ${schemaPath}`);
     // We use npx prisma db push to sync schema without needing migrations files
-    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
+    execSync(`npx prisma db push --accept-data-loss --schema="${schemaPath}"`, { stdio: 'inherit' });
     console.log('🐘 [SERVER] Database schema synced successfully');
   } catch (err) {
     console.error('❌ [SERVER] Database sync failed (will retry on first request):', err);
