@@ -465,6 +465,7 @@ export default function App(){
   }, [diamonds, unlockedTalents, talentPoints, maxLevelUnlocked, showIntro, syncWithCloud, officialLevels]);
 
   const handleUnlockTalent=useCallback((id:string)=>{
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
     const node=TALENT_TREE.find(t=>t.id===id);if(!node)return;
     setTalentPoints(p=>{if(p<node.cost)return p;return p-node.cost;});
     setUnlockedTalents(prev=>{const s=new Set(prev);s.add(id);bonusesRef.current=computeBonuses(s);return s;});
@@ -953,7 +954,7 @@ export default function App(){
         return true;
       });
 
-      if(state.enemies.length===0&&state.enemiesToSpawn===0&&state.status==='playing'){
+      if(state.enemies.length===0&&state.enemiesToSpawn<=0&&state.status==='playing'){
         state.waveActive=false;const ld=getLevelData(state.level);
         if(state.wave>=ld.waves){
           state.status='level_complete';
@@ -1103,6 +1104,7 @@ export default function App(){
     }
     setDia(p=>p-finalCost);slot.tower=new Tower(slot.x,slot.y,slot.side,def);setShopSlotId(null);
     playBuySound();
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15);
     
     // Tutorial Progression
     if (tutorialStep === 2) setTutorialStep(3);
@@ -1162,6 +1164,7 @@ export default function App(){
   },[selectedRewardId, addDia, syncUI]);
 
   const handleProceed = useCallback(() => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(25);
     const state = gs.current;
     setLevelRewards([]);
     setSelectedRewardId(null);
@@ -1181,6 +1184,7 @@ export default function App(){
 
   const handleAction=useCallback(()=>{
     const state=gs.current;setSelSlotId(null);selSlotIdRef.current=null;setShopSlotId(null);
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(20);
     
     // Tutorial cleanup if GO is pressed
     if (tutorialStep >= 0) {
@@ -1272,6 +1276,7 @@ export default function App(){
     const s = gs.current;
     if (s.aoeBombs >= 1 && s.status === 'playing') {
       s.aoeBombs -= 1;
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(40);
       s.shakeTime = 0.8;
       s.flashAlpha = 0.6;
       s.aoeBlasts.push(new AoeBlast(200, 400, 280));
