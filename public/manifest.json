@@ -1,0 +1,17 @@
+{
+  "name": "Proxy Tower",
+  "short_name": "Proxy Tower",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#040810",
+  "theme_color": "#00f5c4",
+  "description": "High-intensity cyberpunk tower defense game.",
+  "icons": [
+    {
+      "src": "/icone/pwa.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

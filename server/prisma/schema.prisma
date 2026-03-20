@@ -1,0 +1,26 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_PUBLIC_URL")
+}
+
+model Player {
+  id                String   @id @default(uuid())
+  terminalId        String   @unique
+  diamonds          Int      @default(100)
+  talentPoints      Int      @default(0)
+  maxLevelUnlocked  Int      @default(1)
+  unlockedTalents   String[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model GlobalLevel {
+  levelNumber Int      @id
+  data        Json
+  updatedAt   DateTime @updatedAt
+}
