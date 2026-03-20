@@ -2244,7 +2244,9 @@ export default function App(){
           </div>
         )}
       </AnimatePresence>
-      <div className="fixed bottom-2 right-4 text-white/10 text-[10px] mf font-black uppercase tracking-[0.2em] pointer-events-none z-[1000]">v1.2.1-live</div>
+      {isInMenu && (
+        <div className="fixed bottom-2 right-4 text-white/10 text-[10px] mf font-black uppercase tracking-[0.2em] pointer-events-none z-[1000]">v1.2.1-live</div>
+      )}
     </div>
   );
 }
