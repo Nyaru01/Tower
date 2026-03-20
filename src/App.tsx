@@ -280,7 +280,7 @@ function RadialUpgrade({ slot, diamonds, onUpgrade, onSell, onClose, sellRatio }
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App(){
   const {
-    needRefresh: [needRefresh, setNeedRefresh],
+    needRefresh: [needRefresh],
     updateServiceWorker,
   } = useRegisterSW();
 
