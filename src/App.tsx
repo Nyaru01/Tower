@@ -1076,7 +1076,8 @@ export default function App(){
         }
       }
 
-      state.enemies=state.enemies?.filter((e:Enemy)=>{
+      state.enemies=state.enemies?.filter((e:any)=>{
+        if(!e || typeof e.update !== 'function') return false;
         if(e.update(dt,state.audio)){
           const dmg = ENEMY_DAMAGE[e.type as EnemyTypeId] || 1;
           const reducedDmg = e.isBoss ? Math.max(1, dmg - bon.bossReduct) : dmg;
@@ -1108,8 +1109,8 @@ export default function App(){
       state.enemies?.forEach((e: Enemy) => {
           if (e.stopDuration > 0 && e.shootTimer <= 0) e.shoot(state);
       });
-      if (!state.enemyProjectiles) state.enemyProjectiles = [];
-      state.enemyProjectiles = state.enemyProjectiles.filter((p: any) => !p.update(dt, state));
+      if (!Array.isArray(state.enemyProjectiles)) state.enemyProjectiles = [];
+      state.enemyProjectiles = state.enemyProjectiles.filter((p: any) => p && typeof p.update === 'function' ? !p.update(dt, state) : false);
 
       if(state.enemies.length===0&&state.enemiesToSpawn<=0&&state.status==='playing'){
         state.waveActive=false;const ld=getLevelData(state.level);
@@ -1141,7 +1142,7 @@ export default function App(){
         }
       }
       state.slots?.forEach((s:any)=>{if(s.tower)s.tower.update(dt,state,bon);});
-      state.projectiles = state.projectiles?.filter((p:any)=>!p.update(dt,state,state.audio));
+      state.projectiles = state.projectiles?.filter((p:any)=> p && typeof p.update === 'function' ? !p.update(dt,state,state.audio) : false);
       state.floatingTexts=state.floatingTexts?.filter((t:FloatingText)=>!t.update(dt));
       if(settings.effects)state.particles=state.particles?.filter((p:Particle)=>!p.update(dt)); else state.particles=[];
       state.rings=state.rings?.filter((r:RingBurst)=>!r.update(dt));
@@ -2407,7 +2408,7 @@ export default function App(){
         )}
       </AnimatePresence>
       {isInMenu && (
-        <div className="fixed bottom-2 right-4 text-white/10 text-[10px] mf font-black uppercase tracking-[0.2em] pointer-events-none z-[1000]">v1.2.2-live</div>
+        <div className="fixed bottom-2 right-4 text-white/20 text-[10px] mf font-black uppercase tracking-[0.2em] pointer-events-none z-[1000] animate-pulse">v1.2.3-STABLE</div>
       )}
     </div>
   );
