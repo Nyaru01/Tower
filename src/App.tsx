@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Zap, Skull, Flame, Heart, Star, Wind, DollarSign, Tag, Pause, FastForward, RotateCcw, Trophy, X, ChevronRight, Music, Swords, Target, ArrowUpCircle, Trash2 } from 'lucide-react';
+import TutorialOverlay from './ui/TutorialOverlay';
 import { AnimatePresence, motion } from 'framer-motion';
 import MainMenu from './ui/MainMenu';
 import LevelEditor from './ui/LevelEditor';
@@ -309,6 +310,8 @@ export default function App(){
   const [levelRewards,setLevelRewards]=useState<Reward[]>([]);
   const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null);
   const [showTalentReminder, setShowTalentReminder] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(-1);
+  const [hasSeenTutorial, setHasSeenTutorial] = useState(() => localStorage.getItem('tutorial_seen') === 'true');
 
   const freeUpgradeRef=useRef(false);
   const goldRushRef=useRef(false);
@@ -556,6 +559,13 @@ export default function App(){
       syncUI();
     }
   }, [isInMenu, isInEditor, initLevel, syncUI, uiState.level]);
+
+  useEffect(() => {
+    if (!isInMenu && !isInEditor && uiState.level === 1 && gameMode === 'career' && !hasSeenTutorial && tutorialStep === -1) {
+      const t = setTimeout(() => setTutorialStep(0), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [isInMenu, isInEditor, uiState.level, gameMode, hasSeenTutorial, tutorialStep]);
 
   const checkVersion = useCallback(async () => {
     // 1. Manually check Service Worker for updates
@@ -1067,6 +1077,9 @@ export default function App(){
       setSelSlotId(null);
       selSlotIdRef.current = null;
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
+      
+      // Tutorial Progression
+      if (tutorialStep === 1) setTutorialStep(2);
     } else {
       // Toggle Selection (Shows RadialUpgrade)
       const ns = selSlotIdRef.current === clicked.id ? null : clicked.id;
@@ -1076,7 +1089,7 @@ export default function App(){
       shopSlotIdRef.current = null;
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
     }
-  }, []);
+  }, [tutorialStep]);
 
   const buyTower=useCallback((tid:string)=>{
     const def=TOWER_TYPES[tid];if(!def)return;
@@ -1090,7 +1103,10 @@ export default function App(){
     }
     setDia(p=>p-finalCost);slot.tower=new Tower(slot.x,slot.y,slot.side,def);setShopSlotId(null);
     playBuySound();
-  },[shopSlotId,setDia]);
+    
+    // Tutorial Progression
+    if (tutorialStep === 2) setTutorialStep(3);
+  },[shopSlotId,setDia,tutorialStep]);
 
   const handleUpgrade=useCallback(()=>{
     if(selSlotId===null)return;
@@ -1155,7 +1171,7 @@ export default function App(){
     }
     initLevel(state.level);
     syncUI();
-  }, [syncUI, initLevel, maxLevelUnlocked, officialLevels]);
+  }, [syncUI, initLevel, maxLevelUnlocked, officialLevels, tutorialStep, setHasSeenTutorial, setTutorialStep]);
 
   const cycleTarget=useCallback(()=>{
     if(selSlotId===null)return;const slot=gs.current.slots.find((s:any)=>s.id===selSlotId);if(!slot?.tower)return;
@@ -1165,6 +1181,16 @@ export default function App(){
 
   const handleAction=useCallback(()=>{
     const state=gs.current;setSelSlotId(null);selSlotIdRef.current=null;setShopSlotId(null);
+    
+    // Tutorial cleanup if GO is pressed
+    if (tutorialStep >= 0) {
+      if (tutorialStep >= 2) {
+        setHasSeenTutorial(true);
+        localStorage.setItem('tutorial_seen', 'true');
+      }
+      setTutorialStep(-1);
+    }
+
     if(state.status==='game_over'){
       state.enemies=[];state.projectiles=[];state.particles=[];state.floatingTexts=[];state.rings=[];state.aoeBlasts=[];state.orbParticles=[];
       setDia(100);setIsPlaying(true);isPlayingRef.current=true;setGameSpeed(1);
@@ -1207,8 +1233,14 @@ export default function App(){
       });
       setTimeout(()=>setWaveAnnounce(null),2000);
       syncUI();
+
+      if (tutorialStep === 3) {
+        setTutorialStep(-1);
+        setHasSeenTutorial(true);
+        localStorage.setItem('tutorial_seen', 'true');
+      }
     }
-  },[setDia,syncUI,initLevel,bonusesRef,addDia,setWaveAnnounce,officialLevels,gameMode,loadCareerProgress]);
+  },[setDia,syncUI,initLevel,bonusesRef,addDia,setWaveAnnounce,officialLevels,gameMode,loadCareerProgress,tutorialStep]);
 
   const restartLevel = useCallback(() => {
     const state = gs.current;
@@ -1949,31 +1981,31 @@ export default function App(){
         <div className="absolute bottom-0 w-full px-4 pb-4 flex justify-between items-center z-20 pointer-events-none">
           <div className="flex items-center gap-2 pointer-events-auto">
             <button onClick={()=>{setIsPlaying(false);isPlayingRef.current=false;setShowPauseModal(true);}}
-              className="bg-[#171626] w-14 h-14 rounded-2xl border border-[#252438] active:scale-90 transition-all flex items-center justify-center hover:bg-[#1e1d32] shadow-xl">
-              <Pause size={20} className="text-white"/>
+              className="bg-[#171626] w-12 h-12 rounded-xl border border-[#252438] active:scale-90 transition-all flex items-center justify-center hover:bg-[#1e1d32] shadow-xl">
+              <Pause size={18} className="text-white"/>
             </button>
             <button onClick={()=>setGameSpeed(p=>p===1?2:1)}
-              className={`w-14 h-14 rounded-2xl border pointer-events-auto active:scale-90 transition-all flex items-center justify-center shadow-xl
+              className={`w-12 h-12 rounded-xl border pointer-events-auto active:scale-90 transition-all flex items-center justify-center shadow-xl
                 ${gameSpeed===2?'bg-[#22c55e] border-[#22c55e] text-[#0b0a16]':'bg-[#171626] border-[#252438] text-white'}`}>
-              <FastForward size={20}/>
+              <FastForward size={18}/>
             </button>
             {talentPoints > 0 && (
               <button onClick={() => toggleTalents(true)}
-                className="w-14 h-14 rounded-2xl border-2 border-[#fbbf24]/50 bg-[#fbbf24]/10 pointer-events-auto active:scale-90 transition-all flex flex-col items-center justify-center shadow-[0_0_15px_rgba(251,191,36,0.2)] group">
+                className="w-12 h-12 rounded-xl border-2 border-[#fbbf24]/50 bg-[#fbbf24]/10 pointer-events-auto active:scale-90 transition-all flex flex-col items-center justify-center shadow-[0_0_15px_rgba(251,191,36,0.2)] group">
                 <div className="relative">
-                  <Star size={18} className="text-[#fbbf24] animate-pulse" fill="currentColor" />
+                  <Star size={16} className="text-[#fbbf24] animate-pulse" fill="currentColor" />
                   <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-white rounded-full flex items-center justify-center text-[7px] font-black text-black border border-[#fbbf24]">{talentPoints}</div>
                 </div>
-                <span className="text-[7px] font-black text-[#fbbf24] mt-1 tracking-widest uppercase">TALENTS</span>
+                <span className="text-[6px] font-black text-[#fbbf24] mt-0.5 tracking-widest uppercase">TALENTS</span>
               </button>
             )}
           </div>
 
           {/* DIAMONDS (Shop Button) */}
           <div className="flex items-center gap-2 pointer-events-auto">
-            <div className="relative group active:scale-90 transition-transform cursor-default" onClick={handleAction}>
-              <div className="w-16 h-16 bg-[#fbbf24] rotate-45 rounded-xl shadow-[0_0_30px_rgba(251,191,36,0.3)] flex items-center justify-center border-4 border-[#0b0a16] group-hover:bg-[#fcd34d] transition-colors">
-                <div className="-rotate-45 mf text-xl font-black text-[#0b0a16]">{diamonds}</div>
+            <div className="relative group active:scale-90 transition-transform cursor-default -translate-y-1" onClick={handleAction}>
+              <div className="w-12 h-12 bg-[#fbbf24] rotate-45 rounded-lg shadow-[0_0_30px_rgba(251,191,36,0.3)] flex items-center justify-center border-4 border-[#0b0a16] group-hover:bg-[#fcd34d] transition-colors">
+                <div className="-rotate-45 mf text-base font-black text-[#0b0a16]">{diamonds}</div>
               </div>
             </div>
           </div>
@@ -1981,15 +2013,15 @@ export default function App(){
           <div className="flex items-center gap-2 pointer-events-auto">
             {/* BOUTON AOE FLAMME */}
             <button onClick={handleAoESpell} disabled={gs.current.aoeBombs < 1 || uiState.status !== 'playing'}
-              className={`w-14 h-14 rounded-2xl border active:scale-90 transition-all flex flex-col items-center justify-center relative shadow-xl
+              className={`w-12 h-12 rounded-xl border active:scale-90 transition-all flex flex-col items-center justify-center relative shadow-xl
                 ${gs.current.aoeBombs >= 1 && uiState.status === 'playing' 
                   ? 'bg-red-500/30 border-red-500/80 text-white bomb-active' 
                   : 'bg-[#171626] border-white/5 opacity-50'}
               `}>
-              <Flame size={18} className={gs.current.aoeBombs >= 1 && uiState.status === 'playing' ? 'text-red-400 drop-shadow-[0_0_5px_#ef4444]' : 'text-white/20'}/>
-              <div className="text-[8px] font-black text-white/30 mt-0.5">{gs.current.aoeBombs} {gs.current.aoeBombs > 1 ? 'BOMBES' : 'BOMBE'}</div>
+              <Flame size={16} className={gs.current.aoeBombs >= 1 && uiState.status === 'playing' ? 'text-red-400 drop-shadow-[0_0_5px_#ef4444]' : 'text-white/20'}/>
+              <div className="text-[7px] font-black text-white/30 mt-0.5">{gs.current.aoeBombs} {gs.current.aoeBombs > 1 ? 'BOMBES' : 'BOMBE'}</div>
               {gs.current.aoeBombs >= 3 && (
-                <div className="absolute inset-0 rounded-2xl bg-[#ef4444]/20 animate-ping pointer-events-none" />
+                <div className="absolute inset-0 rounded-xl bg-[#ef4444]/20 animate-ping pointer-events-none" />
               )}
             </button>
 
@@ -1997,7 +2029,7 @@ export default function App(){
             <button 
               onClick={handleAction} 
               disabled={uiState.status==='playing'}
-              className={`w-14 h-14 rounded-2xl relative flex flex-col items-center justify-center pointer-events-auto active:scale-95 transition-all shadow-2xl overflow-hidden group
+              className={`w-12 h-12 rounded-xl relative flex flex-col items-center justify-center pointer-events-auto active:scale-95 transition-all shadow-2xl overflow-hidden group
                 ${uiState.status==='playing' ? 'bg-[#171626]/50 border border-white/5 opacity-50' 
                   : (uiState.status === 'idle' && autoCountdown > 0 ? 'bg-[#00f5c4]/10 border-2 border-[#00f5c4]/40 shadow-[0_0_20px_#00f5c433]' : 'bg-[#171626] border-2 border-white/10 hover:border-white/30')}`}>
               
@@ -2134,6 +2166,43 @@ export default function App(){
         </div>
       )}
     </AnimatePresence>
+    
+    {/* Tutorial Overlay */}
+    {tutorialStep >= 0 && (
+      <TutorialOverlay 
+        step={tutorialStep} 
+        onNext={() => {
+          if (tutorialStep === 0) setTutorialStep(1);
+          if (tutorialStep === 3) {
+            setTutorialStep(-1);
+            setHasSeenTutorial(true);
+            localStorage.setItem('tutorial_seen', 'true');
+          }
+        }}
+        targetRect={(() => {
+          const canvas = canvasRef.current;
+          if (!canvas || tutorialStep < 1) return null;
+          const rect = canvas.getBoundingClientRect();
+          const sx = rect.width / 400;
+          const sy = rect.height / 800;
+
+          if (tutorialStep === 1) {
+            // Highlighting first slot in Level 1
+            const s = { x: 106, y: 250 }; // Hardcoded based on Level 1 in constants
+            return { x: rect.left + (s.x - 30) * sx, y: rect.top + (s.y - 30) * sy, w: 60 * sx, h: 60 * sy };
+          }
+          if (tutorialStep === 2) {
+            // Highlighting the center area where the Shop radial menu is
+            return { x: rect.left + 50 * sx, y: rect.top + 200 * sy, w: 300 * sx, h: 400 * sy };
+          }
+          if (tutorialStep === 3) {
+            // GO Button area (rough estimate based on HUD fixed position)
+            return { x: rect.left + 290 * sx, y: rect.top + 730 * sy, w: 100 * sx, h: 60 * sy };
+          }
+          return null;
+        })()}
+      />
+    )}
 
     {showSettings && (
       <SettingsModal 
