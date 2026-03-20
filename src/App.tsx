@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Zap, Skull, Flame, Heart, Star, Wind, DollarSign, Tag, Pause, FastForward, RotateCcw, Trophy, X, ChevronRight, Music, Swords, Target, ArrowUpCircle, Trash2 } from 'lucide-react';
+import { Zap, Skull, Flame, Heart, Star, Wind, DollarSign, Tag, Pause, FastForward, RotateCcw, Trophy, X, ChevronRight, Music, Swords, Target, ArrowUpCircle, Trash2, Ban } from 'lucide-react';
 import TutorialOverlay from './ui/TutorialOverlay';
 import { AnimatePresence, motion } from 'framer-motion';
 import MainMenu from './ui/MainMenu';
@@ -9,7 +9,7 @@ import {
   type TalentBonuses, type Reward, type SpawnGroup, WAVE_PATTERNS, getWavePattern, ENEMY_DAMAGE, type EnemyTypeId
 } from './game/constants';
 import { FloatingText, Particle, RingBurst, AoeBlast } from './game/entities/effects';
-import { EnemyProjectile } from './game/entities/Projectile';
+import { EnemyProjectile } from './game/entities/EnemyProjectile';
 import { Enemy } from './game/entities/Enemy';
 import { Tower } from './game/entities/Tower';
 import TalentModal from './ui/TalentModal';
@@ -20,7 +20,7 @@ import { GameAPI } from './game/api';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
 // ── Radial Shop Component ───────────────────────────────────────────────────
-function RadialShop({ slot, diamonds, onBuy, onClose }: { slot: any, diamonds: number, onBuy: (tid: string) => void, onClose: () => void }) {
+function RadialShop({ slot, diamonds, onBuy, onClose, hasTesla }: { slot: any, diamonds: number, onBuy: (tid: string) => void, onClose: () => void, hasTesla: boolean }) {
   const towers = Object.values(TOWER_TYPES);
   const [hovered, setHovered] = useState<string | null>(null);
   
@@ -32,7 +32,7 @@ function RadialShop({ slot, diamonds, onBuy, onClose }: { slot: any, diamonds: n
 
   // Center the menu on screen to avoid edge clipping (as requested)
   const menuX = 50;
-  const menuY = 40;
+  const menuY = 50;
 
   // Actual slot positions for the highlight indicator
   const slotX = (slot.x / CW) * 100;
@@ -76,7 +76,8 @@ function RadialShop({ slot, diamonds, onBuy, onClose }: { slot: any, diamonds: n
               const ty = Math.sin(angle) * radius;
               
               const isHovered = hovered === def.id;
-              const ok = diamonds >= def.cost;
+              const isTeslaLimit = def.id === 'tesla' && hasTesla;
+              const ok = diamonds >= def.cost && !isTeslaLimit;
               const Icon = def.icon;
 
               return (
@@ -93,8 +94,8 @@ function RadialShop({ slot, diamonds, onBuy, onClose }: { slot: any, diamonds: n
                     onPointerEnter={() => setHovered(def.id)}
                     onPointerLeave={() => setHovered(null)}
                     onPointerDown={(e) => { e.stopPropagation(); if (ok) onBuy(def.id); }}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
+                    whileHover={ok ? { scale: 1.1 } : {}}
+                    whileTap={ok ? { scale: 0.9 } : {}}
                     className={`pointer-events-auto relative w-12 h-12 rounded-full border flex items-center justify-center transition-all duration-200 backdrop-blur-md inner-light
                       ${!ok ? 'bg-black/40 border-white/5 opacity-20 grayscale cursor-not-allowed' : 'bg-black/95'}
                     `}
@@ -102,12 +103,22 @@ function RadialShop({ slot, diamonds, onBuy, onClose }: { slot: any, diamonds: n
                       borderColor: isHovered ? def.color : `${def.color}44`,
                       backgroundColor: isHovered ? `${def.color}33` : 'rgba(0,0,0,0.95)',
                       boxShadow: isHovered ? `0 0 20px ${def.glowColor}` : '0 10px 15px -3px rgba(0,0,0,0.1)',
-                      color: ok ? def.color : 'rgba(255,255,255,0.2)'
-                    } : {}}
+                      color: def.color
+                    } : {
+                      borderColor: isTeslaLimit ? '#ef4444' : 'rgba(255,255,255,0.05)',
+                      color: isTeslaLimit ? '#ef4444' : 'rgba(148, 163, 184, 0.4)'
+                    }}
                   >
                     <div className="transition-all duration-300" style={{ filter: isHovered && ok ? `drop-shadow(0 0 8px #fff)` : ok ? `drop-shadow(0 0 5px ${def.color})` : 'none' }}>
                       <Icon size={24} strokeWidth={2.5} />
                     </div>
+                    
+                    {isTeslaLimit && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-red-500/10 rounded-full">
+                            <Ban size={28} className="text-red-500/80 drop-shadow-[0_0_8px_#ef4444]" />
+                        </div>
+                    )}
+
                     {ok && (
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-black border-2 rounded-md px-1.5 py-0.5 text-[10px] font-black tabular-nums shadow-lg z-20" 
                         style={{ borderColor: `${def.color}88`, color: def.color }}>
@@ -131,24 +142,7 @@ function RadialShop({ slot, diamonds, onBuy, onClose }: { slot: any, diamonds: n
             })}
           </AnimatePresence>
 
-          <motion.button
-            onPointerDown={(e) => { 
-              e.stopPropagation(); 
-              if (canClose) onClose(); 
-            }}
-            whileTap={{ scale: 0.92 }}
-            className={`relative z-50 w-20 h-20 rounded-full flex items-center justify-center transition-all duration-500 border-[3px] bg-[#00F2FF] border-white shadow-[0_0_40px_rgba(0,242,255,0.6),inset_0_0_15px_rgba(255,255,255,0.3)] pointer-events-auto active:scale-95`}
-          >
-            <motion.div animate={{ rotate: 90 }} className="text-black transition-colors duration-300">
-              <X size={40} strokeWidth={3} />
-            </motion.div>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 0.4, scale: 1.4 }}
-              exit={{ opacity: 0, scale: 0.5 }}
-              className="absolute inset-0 bg-cyan-400 rounded-full blur-2xl -z-10"
-            />
-          </motion.button>
+          {/* Central area is now empty and transparent */}
         </div>
       </div>
     </div>
@@ -169,7 +163,7 @@ function RadialUpgrade({ slot, diamonds, onUpgrade, onSell, onClose, sellRatio }
 
   // Center the menu on screen
   const menuX = 50;
-  const menuY = 40;
+  const menuY = 50;
   const slotX = (slot.x / CW) * 100;
   const slotY = (slot.y / CH) * 100;
 
@@ -186,8 +180,13 @@ function RadialUpgrade({ slot, diamonds, onUpgrade, onSell, onClose, sellRatio }
           style={{ left: `${slotX}%`, top: `${slotY}%`, width: 48, height: 48 }}
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-cyan-400 shadow-[0_0_20px_#00f2ff]"
         />
-        <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-20">
+        <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30">
+          {/* Main connection to slot */}
           <line x1={`${menuX}%`} y1={`${menuY}%`} x2={`${slotX}%`} y2={`${slotY}%`} stroke="#00f2ff" strokeWidth="1.5" strokeDasharray="4 4" />
+          {/* Branch to UPGRADE */}
+          <line x1={`${menuX}%`} y1={`${menuY}%`} x2={`${menuX}%`} y2={`${menuY - (radius/CH)*100}%`} stroke="#00f5c4" strokeWidth="2" strokeDasharray="2 2" />
+          {/* Branch to SELL */}
+          <line x1={`${menuX}%`} y1={`${menuY}%`} x2={`${menuX}%`} y2={`${menuY + (radius/CH)*100}%`} stroke="#ef4444" strokeWidth="2" strokeDasharray="2 2" />
         </svg>
       </motion.div>
       
@@ -224,8 +223,6 @@ function RadialUpgrade({ slot, diamonds, onUpgrade, onSell, onClose, sellRatio }
                       {tower.upgradeCost}♦
                     </div>
                   </motion.button>
-                  <span className={`absolute -top-12 text-[12px] font-black uppercase tracking-[0.2em] leading-none transition-colors drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]
-                    ${diamonds >= tower.upgradeCost ? 'text-[#00f5c4] drop-shadow-[0_0_10px_rgba(0,245,196,0.4)]' : 'text-white/30'}`}>UPGRADE</span>
                 </motion.div>
               );
             })()}
@@ -256,21 +253,10 @@ function RadialUpgrade({ slot, diamonds, onUpgrade, onSell, onClose, sellRatio }
                       +{sellValue}♦
                     </div>
                   </motion.button>
-                  <span className="absolute -bottom-12 text-[12px] font-black uppercase text-[#ef4444] tracking-[0.2em] leading-none drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]">VENDRE</span>
                 </motion.div>
               );
             })()}
           </AnimatePresence>
-
-          {/* Central Handle (CLOSE) */}
-          <motion.button
-            onPointerDown={(e) => { e.stopPropagation(); onClose(); }}
-            className="relative z-50 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-500 border-2 bg-black/80 border-white/20 shadow-xl pointer-events-auto active:scale-95"
-          >
-            <motion.div animate={{ rotate: 45 }} className="text-white/40">
-              <X size={32} strokeWidth={2} />
-            </motion.div>
-          </motion.button>
         </div>
       </div>
     </div>
@@ -487,7 +473,7 @@ export default function App(){
   }, []);
 
   const gs=useRef<any>({
-    lastTime:0,speedMultiplier:1,shakeTime:0,flashAlpha:0,
+    lastTime:0,speedMultiplier:1,shakeTime:0,baseHitFlash:0,flashAlpha:0,
     enemies:[],projectiles:[],enemyProjectiles:[],particles:[],floatingTexts:[],orbParticles:[],rings:[],aoeBlasts:[],
     spawnQueue: [] as SpawnGroup[],
     currentGroup: null as SpawnGroup | null,
@@ -496,8 +482,8 @@ export default function App(){
     totalWaveEnemies: 0,
     waveActive: false,
     autoWaveTimer:0,
-    level:1,wave:1,status:'idle',baseHp:10,kills:0,bossPoints:0, aoeBombs:0,
-    slots:[], path:[{x:200,y:70},{x:200,y:675}], bgColor: '#168f78',
+    level:1,wave:1,status:'idle',baseHp:10,kills:0,bossPoints:0, aoeBombs:0, droppedCrystals: [],
+    slots:[], path:[{x:200,y:70},{x:200,y:675}], decorations: [], bgColor: '#168f78',
     bokeh:Array.from({length:22}).map(()=>{const l=Math.random()>0.5;return{x:l?62+Math.random()*58:280+Math.random()*58,y:140+Math.random()*560,r:4+Math.random()*13,speed:8+Math.random()*18,alpha:0.03+Math.random()*0.12};}),
     audio: { energy: 0, bass: 0, mid: 0, high: 0 },
   });
@@ -533,6 +519,8 @@ export default function App(){
     s.baseHp = 10 + bonusesRef.current.bonusHp;
     s.kills = 0;
     s.flashAlpha = 0;
+    s.droppedCrystals = [];
+    s.decorations = [];
     
     // Check official levels from DB first, then hardcoded defaults
     const lvlConfig = (officialLevels || {})[lvl] || INITIAL_LEVELS[lvl];
@@ -540,6 +528,7 @@ export default function App(){
     if (lvlConfig) {
       s.path = lvlConfig.path || [{x:200,y:70},{x:200,y:675}];
       s.slots = (lvlConfig.slots || [])?.map((sl: any) => ({ ...sl, tower: null }));
+      s.decorations = lvlConfig.decorations || [];
       s.bgColor = lvlConfig.bgColor || '#168f78';
     } else {
       // Procedural fallback for levels > Max
@@ -690,9 +679,6 @@ export default function App(){
       const bw=maxCX*2+pad*2, bh=CH+410, bx=CW/2-bw/2, by=-205;
 
       ctx.fillStyle=C.bg;ctx.fillRect(0,0,CW,CH);
-      ctx.strokeStyle=C.grid;ctx.lineWidth=1;
-      for(let i=0;i<=CW;i+=40){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,CH);ctx.stroke();}
-      for(let i=0;i<=CH;i+=40){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(CW,i);ctx.stroke();}
 
       let sx=0,sy=0;if(state.shakeTime>0){sx=(Math.random()-0.5)*12*state.shakeTime;sy=(Math.random()-0.5)*12*state.shakeTime;}
       ctx.save();ctx.translate(sx,sy);
@@ -708,6 +694,36 @@ export default function App(){
       const ig=ctx.createLinearGradient(bx,by,bx+bw/3,by+bh/3);ig.addColorStop(0,'rgba(255,255,255,0.05)');ig.addColorStop(1,'rgba(255,255,255,0)');
       ctx.fillStyle=ig; ctx.fillRect(bx,by,bw,bh);
       ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=1;ctx.strokeRect(bx,by,bw,bh);
+      
+      // --- CUSTOM DECORATIONS ---
+      const ot = ts * 0.001;
+      state.decorations?.forEach((dec: any) => {
+          ctx.save();
+          ctx.translate(dec.x, dec.y);
+          if (dec.type === 'crystal') {
+              const hover = Math.sin(ot * 2 + dec.id) * 4;
+              ctx.translate(0, hover);
+              ctx.rotate(ot * 0.5 + dec.id);
+              ctx.strokeStyle = '#00f5c4'; ctx.lineWidth = 1.5;
+              ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(7, 0); ctx.lineTo(0, 10); ctx.lineTo(-7, 0); ctx.closePath();
+              ctx.stroke();
+              ctx.fillStyle = 'rgba(0, 245, 196, 0.2)'; ctx.fill();
+          } else if (dec.type === 'circuit') {
+              ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+              ctx.beginPath(); ctx.moveTo(-15, -15); ctx.lineTo(15, 15);
+              ctx.moveTo(-15, -15); ctx.arc(-15, -15, 2, 0, Math.PI*2);
+              ctx.stroke();
+          } else if (dec.type === 'plate') {
+              ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+              ctx.beginPath();
+              for(let i=0; i<6; i++) {
+                  const a = i * Math.PI/3;
+                  ctx.lineTo(Math.cos(a)*20, Math.sin(a)*10);
+              }
+              ctx.closePath(); ctx.stroke();
+          }
+          ctx.restore();
+      });
 
       // Path Rendering
       const points = state.path;
@@ -892,19 +908,143 @@ export default function App(){
       state.aoeBlasts?.forEach((b:AoeBlast) => b.draw(ctx));
       state.floatingTexts?.forEach((t:FloatingText) => t.draw(ctx));
 
+      // Draw dropped crystals
+      state.droppedCrystals?.forEach((c: any) => {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        if (c.collected) {
+            ctx.scale(1 - c.moveProgress, 1 - c.moveProgress);
+            ctx.rotate(ts * 0.01);
+        } else {
+            const hover = Math.sin(ts * 0.005 + c.id) * 3;
+            ctx.translate(0, hover);
+            ctx.rotate(ts * 0.002);
+        }
+
+        // Diamond shape
+        ctx.beginPath();
+        ctx.moveTo(0, -8); ctx.lineTo(6, 0); ctx.lineTo(0, 8); ctx.lineTo(-6, 0); ctx.closePath();
+        
+        ctx.fillStyle = '#fbbf24';
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      });
+
       // Bokeh & Effects
       state.bokeh?.forEach((p:any)=>{const bg=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);bg.addColorStop(0,`rgba(40,234,192,${p.alpha*1.5})`);bg.addColorStop(1,'rgba(40,234,192,0)');ctx.fillStyle=bg;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();});
       
       const lastWp=points[points.length-1];
       if(lastWp){
         const ot=ts*0.001; 
-        ctx.save();ctx.translate(lastWp.x,lastWp.y);
-        const og=ctx.createRadialGradient(0,0,10,0,0,38);og.addColorStop(0,'rgba(40,234,192,0)');og.addColorStop(0.6,'rgba(40,234,192,0.08)');og.addColorStop(1,'rgba(40,234,192,0)');
-        ctx.fillStyle=og;ctx.beginPath();ctx.ellipse(0,0,38,14,0,0,Math.PI*2);ctx.fill();
-        for(let i=0;i<6;i++){const a=ot*1.4+i*Math.PI/3,x=Math.cos(a)*26,y=Math.sin(a)*10;ctx.strokeStyle='#28EAC0';ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.stroke();}
-        const cg=ctx.createRadialGradient(0,0,0,0,0,18);cg.addColorStop(0,'rgba(200,255,245,0.9)');cg.addColorStop(0.3,'rgba(40,234,192,0.6)');cg.addColorStop(1,'rgba(20,160,130,0)');
-        ctx.globalAlpha=0.7+Math.sin(ot*3)*0.15;ctx.fillStyle=cg;ctx.beginPath();ctx.ellipse(0,0,18,7,0,0,Math.PI*2);ctx.fill();
-        ctx.globalAlpha=1;ctx.restore();
+        ctx.save();
+        ctx.translate(lastWp.x, lastWp.y);
+        
+        // --- BASE HIT GLITCH ---
+        const isHit = state.baseHitFlash > 0;
+        if (isHit) {
+            ctx.translate((Math.random()-0.5)*12, (Math.random()-0.5)*12);
+            if (Math.random() < 0.3) ctx.filter = 'hue-rotate(90deg) brightness(2)';
+        }
+
+        // 1. UNDER-GLOW & HEX SHIELD
+        const pulse = 0.5 + Math.sin(ts*0.004)*0.5;
+        const color = isHit ? '#ff3d5a' : '#00f5c4';
+        
+        // Radial burst
+        const gradient = ctx.createRadialGradient(0,0,0, 0,0,60);
+        gradient.addColorStop(0, `${color}44`);
+        gradient.addColorStop(0.7, `${color}00`);
+        ctx.fillStyle = gradient;
+        ctx.beginPath(); ctx.arc(0,0,60,0,Math.PI*2); ctx.fill();
+
+        // Hexagon Shield
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.1 + pulse * 0.2;
+        const drawHex = (r: number) => {
+            ctx.beginPath();
+            for(let i=0; i<6; i++){
+                const a = i * Math.PI/3;
+                ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r*0.5);
+            }
+            ctx.closePath(); ctx.stroke();
+        };
+        drawHex(55); drawHex(45);
+
+        // 2. 3D ENERGY ARCS (The "Cage")
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 2;
+        const drawArc = (radius: number, rotation: number, speed: number, offset: number) => {
+            ctx.save();
+            ctx.rotate(offset);
+            const rA = ot * speed;
+            const w = Math.cos(rA) * radius;
+            ctx.strokeStyle = isHit ? '#ff3d5a' : `rgba(0, 245, 196, ${0.4 + Math.sin(rA)*0.3})`;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, Math.abs(w), radius, rotation, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Energy "Bead" on arc
+            if (Math.abs(w) > 5) {
+                const bA = ot * 2 + offset;
+                const bx = Math.cos(bA) * w;
+                const by = Math.sin(bA) * radius;
+                ctx.fillStyle = '#fff';
+                ctx.shadowBlur = 10; ctx.shadowColor = color;
+                ctx.beginPath(); ctx.arc(bx, by, 2, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.restore();
+        };
+        drawArc(38, 0, 1.2, 0);
+        drawArc(32, Math.PI/4, -0.8, Math.PI/3);
+        drawArc(32, -Math.PI/4, 0.5, -Math.PI/3);
+
+        // 3. ORBITING MICRO-DRONES
+        for(let i=0; i<4; i++) {
+            const a = ot * 4 + (i * Math.PI/2);
+            const rX = 48 + Math.sin(ot*2 + i)*10;
+            const rY = 16 + Math.cos(ot*2 + i)*5;
+            const dx = Math.cos(a) * rX;
+            const dy = Math.sin(a) * rY;
+            ctx.fillStyle = color;
+            ctx.shadowBlur = 5; ctx.shadowColor = color;
+            ctx.fillRect(dx-1.5, dy-1.5, 3, 3);
+            
+            // Tiny trail
+            ctx.beginPath();
+            ctx.moveTo(dx, dy);
+            ctx.lineTo(dx - Math.cos(a)*10, dy - Math.sin(a)*4);
+            ctx.strokeStyle = color; ctx.lineWidth = 0.5; ctx.globalAlpha = 0.3;
+            ctx.stroke();
+        }
+
+        // 4. THE CORE (Singularity)
+        ctx.globalAlpha = 1;
+        const coreSize = 12 + Math.sin(ts*0.01)*3;
+        const coreGlow = ctx.createRadialGradient(0,0,0, 0,0, coreSize*2);
+        coreGlow.addColorStop(0, '#fff');
+        coreGlow.addColorStop(0.2, color);
+        coreGlow.addColorStop(1, 'rgba(0,0,0,0)');
+        
+        ctx.fillStyle = coreGlow;
+        ctx.beginPath(); ctx.arc(0,0, coreSize*2, 0, Math.PI*2); ctx.fill();
+        
+        // Inner Core Shape (Diamond)
+        ctx.save();
+        ctx.rotate(ts*0.005);
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(0, -coreSize/2); ctx.lineTo(coreSize/2, 0); ctx.lineTo(0, coreSize/2); ctx.lineTo(-coreSize/2, 0);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+
+        ctx.restore();
       }
       ctx.restore();
 
@@ -942,19 +1082,35 @@ export default function App(){
           const dmg = ENEMY_DAMAGE[e.type as EnemyTypeId] || 1;
           const reducedDmg = e.isBoss ? Math.max(1, dmg - bon.bossReduct) : dmg;
           state.baseHp = Math.max(0, state.baseHp - reducedDmg);
-          state.shakeTime = e.isBoss?0.9:0.4; state.flashAlpha=0.3; ns=true;
+          state.baseHitFlash = 0.4;
+          state.shakeTime = 0.2;
+          ns=true;
           if(state.baseHp<=0){state.baseHp=0;state.status='game_over';setIsPlaying(false);isPlayingRef.current=false;}
           return false;
         }
-        if (e.hp <= 0) {
-          if (e.isBoss) {
-            state.aoeBombs++;
-            state.floatingTexts.push(new FloatingText(e.x, e.y - 40, "+1 BOMBE AOE!", 2, '#ef4444'));
-          }
-          return false;
+        
+        // Boss minion spawning logic
+        if(e.isBoss && e.hp > 0) {
+            e.minionTimer -= dt;
+            if(e.minionTimer <= 0) e.spawnMinions(state);
         }
+          if (e.hp <= 0) {
+            if (e.isBoss) {
+              state.aoeBombs++;
+              state.floatingTexts.push(new FloatingText(e.x, e.y - 40, "+1 BOMBE AOE!", 2, '#ef4444'));
+            }
+            // Logic moved to killEnemy in Projectile.ts
+            return false;
+          }
         return true;
       });
+
+      // --- ENEMY ATTACKS UPDATES ---
+      state.enemies?.forEach((e: Enemy) => {
+          if (e.stopDuration > 0 && e.shootTimer <= 0) e.shoot(state);
+      });
+      if (!state.enemyProjectiles) state.enemyProjectiles = [];
+      state.enemyProjectiles = state.enemyProjectiles.filter((p: any) => !p.update(dt, state));
 
       if(state.enemies.length===0&&state.enemiesToSpawn<=0&&state.status==='playing'){
         state.waveActive=false;const ld=getLevelData(state.level);
@@ -986,7 +1142,7 @@ export default function App(){
         }
       }
       state.slots?.forEach((s:any)=>{if(s.tower)s.tower.update(dt,state,bon);});
-      state.projectiles = state.projectiles?.filter((p:any)=>!p.update(dt,state,addDia,bon,state.audio));
+      state.projectiles = state.projectiles?.filter((p:any)=>!p.update(dt,state,state.audio));
       state.enemyProjectiles = state.enemyProjectiles?.filter((p:any)=>!p.update(dt,state));
       
       // Enemy Offense Logic
@@ -1016,6 +1172,21 @@ export default function App(){
       if(settings.effects)state.particles=state.particles?.filter((p:Particle)=>!p.update(dt)); else state.particles=[];
       state.rings=state.rings?.filter((r:RingBurst)=>!r.update(dt));
       state.aoeBlasts=state.aoeBlasts?.filter((b:AoeBlast)=>!b.update(dt));
+      
+      // Update dropped crystals
+      state.droppedCrystals = state.droppedCrystals?.filter((c: any) => {
+        if (c.collected) {
+          c.moveProgress += dt * 2.5;
+          if (c.moveProgress >= 1) {
+            addDia(c.value);
+            return false;
+          }
+          // Smooth flight to HUD (estimated center 200, 760)
+          c.x = c.x + (200 - c.x) * (c.moveProgress * c.moveProgress);
+          c.y = c.y + (760 - c.y) * (c.moveProgress * c.moveProgress);
+        }
+        return true;
+      });
       if(ns)syncUI();
     };
 
@@ -1027,6 +1198,7 @@ export default function App(){
       // Visual/Feedback updates (ALWAYS RUN)
       const state=gs.current;
       if(state.shakeTime>0)state.shakeTime-=dt;
+      if(state.baseHitFlash>0)state.baseHitFlash-=dt;
       if(state.flashAlpha>0)state.flashAlpha=Math.max(0,state.flashAlpha-dt*4.5);
       state.bokeh?.forEach((p:any)=>{p.y-=p.speed*dt;if(p.y<128)p.y=710;});
       state.slots?.forEach((s:any)=>{if(s.tower){
@@ -1060,6 +1232,20 @@ export default function App(){
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (CW / rect.width);
     const y = (e.clientY - rect.top) * (CH / rect.height);
+
+    // -- CRYSTAL COLLECTION --
+    const clickedCrystal = state.droppedCrystals?.find((c: any) => !c.collected && Math.hypot(c.x - x, c.y - y) < 45);
+    if (clickedCrystal) {
+      // AOE Pickup logic (collect nearby crystals)
+      state.droppedCrystals?.forEach((c: any) => {
+        if (!c.collected && Math.hypot(c.x - x, c.y - y) < 80) {
+          c.collected = true;
+          c.moveProgress = 0;
+        }
+      });
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
+      return; // Stop here if we picked up crystals
+    }
     
     // Lenient hit detection
     const slots = state.slots || [];
@@ -1376,6 +1562,7 @@ export default function App(){
             const s = gs.current;
             s.slots = (config.slots || []).map((sl: any) => ({ ...sl, id: sl.id, x: sl.x, y: sl.y, r: 16, tower: null, side: sl.side }));
             s.path = config.path || [{x:200,y:70},{x:200,y:675}];
+            s.decorations = config.decorations || [];
             s.bgColor = config.bgColor || '#168f78';
             s.wave = 1;
             s.status = 'idle';
@@ -1706,6 +1893,7 @@ export default function App(){
                     diamonds={diamonds}
                     onBuy={buyTower}
                     onClose={() => setShopSlotId(null)}
+                    hasTesla={gs.current.slots.some((s: any) => s.tower?.def.id === 'tesla')}
                   />
                 )}
                 {selSlot && selSlot.tower && !shopSlot && uiState.status !== 'game_over' && (

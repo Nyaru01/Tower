@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Settings, ChevronRight, Shield, Rocket, Sword, Edit3, ChevronDown, Database, CloudDownload, RefreshCw } from 'lucide-react';
+import { X, Settings, ChevronRight, Rocket, Sword, Edit3, ChevronDown, Database, CloudDownload, RefreshCw } from 'lucide-react';
 import { TOWER_TYPES, ENEMY_TYPES } from '../game/constants';
 import CareerTree from './CareerTree';
 
@@ -249,16 +249,9 @@ export default function MainMenu({ onSelectCareerLevel, onSelectLevel, currentLe
                   </div>
                 </div>
                 <div className="flex flex-col items-start">
-                   <div className="mf text-[8px] text-cyan-400 font-bold tracking-[0.3em] uppercase mb-1 flex items-center gap-2">
-                     <span className="w-1 h-1 bg-cyan-400 rounded-full" /> Mission_Standard
-                   </div>
                    <span className="text-white text-2xl font-bold tracking-tight uppercase leading-none">Carrière</span>
-                   <span className="tf text-[9px] text-white/30 font-medium tracking-wide mt-1.5 uppercase italic">Secteur Delta débloqué</span>
                 </div>
                 <div className="ml-auto flex flex-col items-end gap-1">
-                  <div className="h-1 w-12 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-cyan-400/40 w-[65%]" />
-                  </div>
                   <ChevronRight size={18} className="text-white/20 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all" />
                 </div>
               </div>
@@ -281,7 +274,7 @@ export default function MainMenu({ onSelectCareerLevel, onSelectLevel, currentLe
             ) : (
               <div className="anim-up p-5 holo-card border-blue-500/20" style={{ opacity: 0 }}>
                 <div className="flex items-center justify-between mb-4">
-                  <span className="mf text-[8px] text-[#38bdf8] font-bold tracking-widest uppercase">Select_Sector</span>
+                  <span className="mf text-[8px] text-[#38bdf8] font-bold tracking-widest uppercase">Selectionne ton niveau</span>
                   <button onClick={() => setShowLevelSelect(false)} className="text-white/20 hover:text-white transition-colors"><X size={16} /></button>
                 </div>
                 <div className="grid grid-cols-5 gap-2.5">
@@ -350,8 +343,6 @@ export default function MainMenu({ onSelectCareerLevel, onSelectLevel, currentLe
           </div>
 
           <div className="anim-up flex items-center justify-center gap-3 mf text-white/10 text-[7px] tracking-[0.5em] uppercase" style={{ animationDelay: '0.7s', opacity: 0 }}>
-            <Shield size={10} className="opacity-50" />
-            <span>Cryptage_Terminal_Actif</span>
           </div>
         </div>
 

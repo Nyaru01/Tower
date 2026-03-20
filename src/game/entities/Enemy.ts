@@ -1,11 +1,13 @@
 import { C, ENEMY_TYPES } from '../constants';
+import { EnemyProjectile } from './EnemyProjectile';
 
 export class Enemy {
   x:number;y:number;isBoss:boolean;type:string='';color:string='#000';
   speed:number;baseSpeed:number;maxHp:number;hp:number;radius:number;
   history:{x:number,y:number}[]=[];hitFlash=0;wobble:number;spawnAnim=0;slowTimer=0;
   path:{x:number,y:number}[];targetWpIdx=0;shield=0;maxShield=0;lastResistTime=0;
-  shootTimer=1.5;
+  stopDuration=0;lastStopDist=0;
+  shootTimer=2.5; minionTimer=4.0;
   constructor(abs:number, path: {x:number,y:number}[], isBoss=false, forcedType?: string){
     this.path=path;
     this.x=path[0].x+(Math.random()*16-8);
@@ -43,6 +45,7 @@ export class Enemy {
         this.type='normal';this.color='#94a3b8';this.speed=62+sb*1.1;this.maxHp=25*hm;this.radius=9;
     }
     this.baseSpeed=this.speed;this.hp=this.maxHp;
+    this.lastStopDist = -Math.random() * 300; // Stagger first stops
   }
   update(dt:number, audio?:{high:number}){
     this.spawnAnim=Math.min(1,this.spawnAnim+dt*6);
@@ -54,16 +57,38 @@ export class Enemy {
     if(this.slowTimer>0){this.slowTimer-=dt;this.speed=this.baseSpeed*0.38;}
     else this.speed=Math.min(this.baseSpeed,this.speed+dt*60);
     
+    if(this.stopDuration > 0) {
+      this.stopDuration -= dt;
+      // When stopped, they shoot at the nearest tower if timer allows
+      this.shootTimer -= dt;
+      return false; // Not at end of path while stopped
+    }
+
     if(this.targetWpIdx < this.path.length){
       const target = this.path[this.targetWpIdx];
       const dx = target.x - this.x, dy = target.y - this.y;
       const dist = Math.hypot(dx, dy);
-      if(dist < finalSpeed * dt){
+      
+      const moved = finalSpeed * dt;
+      if(dist < moved){
         this.x = target.x; this.y = target.y;
         this.targetWpIdx++;
       } else {
-        this.x += (dx/dist) * finalSpeed * dt;
-        this.y += (dy/dist) * finalSpeed * dt;
+        this.x += (dx/dist) * moved;
+        this.y += (dy/dist) * moved;
+      }
+      
+      this.lastStopDist += moved;
+      // Much larger distance interval (300-550px) and a probabilistic skip (50% chance)
+      if(this.lastStopDist > 300 + Math.random() * 250 && this.targetWpIdx < this.path.length - 2) {
+          if(Math.random() < 0.5) {
+              this.stopDuration = 1.5 + Math.random() * 1.0;
+              this.lastStopDist = 0;
+              this.shootTimer = 0.4; // First shot soon after stopping
+          } else {
+              // If skipped, we wait at least another 150px before checking again
+              this.lastStopDist -= 150; 
+          }
       }
     }
 
@@ -119,5 +144,37 @@ export class Enemy {
       ctx.fillStyle=hr>0.4?C.health:(hr>0.2?'#fbbf24':C.healthLow);ctx.beginPath();ctx.roundRect(bx,by,bw*hr,4,2);ctx.fill();
       ctx.globalAlpha=1;
     }
+  }
+  
+  shoot(state: any) {
+    if(!state.slots) return;
+    const targetTower = state.slots
+        .filter((s:any) => s.tower && s.tower.disabledTimer <= 0)
+        .map((s:any) => s.tower)
+        .find((t:any) => Math.hypot(t.x - this.x, t.y - this.y) < 160);
+    
+    if(targetTower) {
+        // Simple damage: boss does more
+        const dmg = this.isBoss ? 45 : (this.type === 'striker' ? 25 : 12);
+        const col = this.isBoss ? '#ef4444' : (this.type === 'striker' ? '#fbbf24' : '#fff');
+        state.enemyProjectiles.push(new EnemyProjectile(this.x, this.y, targetTower, dmg, col));
+        this.shootTimer = this.isBoss ? 1.5 : 2.5; // Reset timer
+    }
+  }
+
+  spawnMinions(state: any) {
+    if(!this.isBoss || this.hp <= 0) return;
+    const abs = (state.level - 1) * 5 + state.wave;
+    for(let i=0; i<4; i++) {
+        const m = new Enemy(abs, this.path, false, 'normal');
+        m.x = this.x + (Math.random()*20-10);
+        m.y = this.y + (Math.random()*20-10);
+        m.targetWpIdx = this.targetWpIdx;
+        m.spawnAnim = 0.5; // Start partially spawned
+        state.enemies.push(m);
+    }
+    this.minionTimer = 6.5 + Math.random() * 3; // Reset timer
+    // Visual effect
+    if(state.rings) state.rings.push({ x: this.x, y: this.y, color: '#ef4444', radius: 10, maxRadius: 50, life: 1, alpha: 1 });
   }
 }

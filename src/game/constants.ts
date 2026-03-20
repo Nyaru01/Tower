@@ -43,7 +43,7 @@ export interface TalentNode {
 
 export const TALENT_TREE: TalentNode[] = [
   { id:'atk1', branch:'atk',  tier:1, name:'Acier Aiguisé', desc:'+15% dégâts globaux',           icon:Swords, requires:[],       cost:1 },
-  { id:'atk2', branch:'atk',  tier:2, name:'Œil de Lynx',   desc:'+12% chance critique globale',   icon:Target, requires:['atk1'], cost:1 },
+  { id:'atk2', branch:'atk',  tier:2, name:'Œil de Lynx',   desc:'+12% de dégâts critiques',   icon:Target, requires:['atk1'], cost:1 },
   { id:'atk3', branch:'atk',  tier:3, name:'Dévastation',   desc:'Crit ×1.5 multiplicateur',       icon:Skull, requires:['atk2'], cost:2 },
   { id:'eco1', branch:'eco',  tier:1, name:'Mineur',         desc:'+1♦ garanti par kill',           icon:Pickaxe, requires:[],       cost:1 },
   { id:'eco2', branch:'eco',  tier:2, name:'Négociant',      desc:'Vente des tours à 75%',          icon:Coins, requires:['eco1'], cost:1 },
@@ -51,7 +51,7 @@ export const TALENT_TREE: TalentNode[] = [
   { id:'def1', branch:'def',  tier:1, name:'Rempart',        desc:'+3 points de vie de base',       icon:Shield, requires:[],       cost:1 },
   { id:'def2', branch:'def',  tier:2, name:'Fortification',  desc:'Boss infligent −2 dégâts',       icon:Castle, requires:['def1'], cost:1 },
   { id:'def3', branch:'def',  tier:3, name:'Régénération',   desc:'+1 vie par niveau complet',      icon:HeartPulse, requires:['def2'], cost:2 },
-  { id:'tec1', branch:'tech', tier:1, name:'Longue Portée',  desc:'+20% portée de toutes les tours',icon:Radio, requires:[],       cost:1 },
+  { id:'tec1', branch:'tech', tier:1, name:'Longue Portée',  desc:'+20% portée pour les tours',icon:Radio, requires:[],       cost:1 },
   { id:'tec2', branch:'tech', tier:2, name:'Mécanisme',      desc:'−15% temps de rechargement',     icon:Settings, requires:['tec1'], cost:1 },
   { id:'tec3', branch:'tech', tier:3, name:'Suprématie',     desc:'+20% dégâts supplémentaires',    icon:Flame, requires:['tec2'], cost:2 },
 ];

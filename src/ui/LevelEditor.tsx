@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Trash2, ArrowLeft, Download, Upload, Cpu, Waypoints, ChevronDown, ChevronUp, Check, Plus } from 'lucide-react';
+import { Trash2, ArrowLeft, Download, Upload, Cpu, Waypoints, ChevronDown, ChevronUp, Check, Plus, Grid as GridIcon, Sparkles } from 'lucide-react';
 import { INITIAL_LEVELS } from '../game/constants';
 
 const CW = 400, CH = 800;
@@ -7,6 +7,7 @@ const CW = 400, CH = 800;
 interface Point { x: number; y: number; z?: number; }
 interface Slot { id: number; x: number; y: number; side: 'left' | 'right'; }
 
+interface Decoration { id: number; x: number; y: number; type: 'crystal' | 'circuit' | 'plate'; }
 interface LevelEditorProps {
   onBack: () => void;
   onSave: (id: number, config: any) => void;
@@ -17,12 +18,15 @@ interface LevelEditorProps {
 }
 
 export default function LevelEditor({ onBack, onSave, onTest, initialConfig, initialLevelId = 1, officialLevels = {} }: LevelEditorProps) {
-  const [editMode, setEditMode] = useState<'slots' | 'path'>('slots');
+  const [editMode, setEditMode] = useState<'slots' | 'path' | 'decor'>('slots');
+  const [decorType, setDecorType] = useState<'crystal' | 'circuit' | 'plate'>('crystal');
   const [altitudeMode, setAltitudeMode] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
   const [currentLevelId, setCurrentLevelId] = useState(initialLevelId);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [slots, setSlots] = useState<Slot[]>(initialConfig?.slots?.map((s:any, i:number)=>({id:s.id||i+1, x:s.x, y:s.y, side:s.side})) || []);
   const [path, setPath] = useState<Point[]>(initialConfig?.path || [{x:200, y:70}, {x:200, y:675}]);
+  const [decorations, setDecorations] = useState<Decoration[]>(initialConfig?.decorations || []);
   const [bgColor, setBgColor] = useState(initialConfig?.bgColor || '#1cb899');
   
   const addNewLevel = () => {
@@ -40,11 +44,13 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
     if (config) {
       setSlots((config.slots || [])?.map((s:any, i:number)=>({id:s.id||i+1, x:s.x, y:s.y, side:s.side})));
       setPath(config.path || [{x:200, y:70}, {x:200, y:675}]);
+      setDecorations(config.decorations || []);
       setBgColor(config.bgColor || '#1cb899');
     }
   };
   const [mousePos, setMousePos] = useState<Point | null>(null);
   const [draggingSlotId, setDraggingSlotId] = useState<number | null>(null);
+  const [draggingDecorId, setDraggingDecorId] = useState<number | null>(null);
   const [draggingPathIdx, setDraggingPathIdx] = useState<number | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -95,6 +101,58 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
     const ig=ctx.createLinearGradient(bx,by,bx+bw/3,by+bh/3);ig.addColorStop(0,'rgba(255,255,255,0.07)');ig.addColorStop(1,'rgba(255,255,255,0)');
     ctx.fillStyle=ig;ctx.beginPath();ctx.roundRect(bx,by,bw,bh,0);ctx.fill();
     ctx.strokeStyle='rgba(255,255,255,0.07)';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(bx,by,bw,bh,0);ctx.stroke();
+    
+    // --- TECH DECORATIONS ---
+    const ot = ts * 0.001;
+    ctx.save();
+    
+    // Draw manual decorations
+    decorations?.forEach(dec => {
+        ctx.save();
+        ctx.translate(dec.x, dec.y);
+        
+        if (dec.type === 'crystal') {
+            const hover = Math.sin(ot * 2 + dec.id) * 4;
+            ctx.translate(0, hover);
+            ctx.rotate(ot * 0.5 + dec.id);
+            ctx.strokeStyle = '#00f5c4';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, -10); ctx.lineTo(7, 0); ctx.lineTo(0, 10); ctx.lineTo(-7, 0); ctx.closePath();
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(0, 245, 196, 0.2)'; ctx.fill();
+        } else if (dec.type === 'circuit') {
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(-15, -15); ctx.lineTo(15, 15);
+            ctx.moveTo(-15, -15); ctx.arc(-15, -15, 2, 0, Math.PI*2);
+            ctx.stroke();
+        } else if (dec.type === 'plate') {
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for(let i=0; i<6; i++) {
+                const a = i * Math.PI/3;
+                ctx.lineTo(Math.cos(a)*20, Math.sin(a)*10);
+            }
+            ctx.closePath(); ctx.stroke();
+        }
+        ctx.restore();
+    });
+
+    // 2. TECH DEBRIS (kept for style)
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 0.5;
+    for(let i=0; i<8; i++) {
+        const x = bx + (Math.sin(i * 137) * 0.5 + 0.5) * bw;
+        const y = (Math.cos(i * 42) * 0.5 + 0.5) * CH;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 30, y + 30); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.restore(); // Final restore for the main scene save at L101
 
     // --- SYSTÈME DE RENDU ÉLITE V6 (Soudure Séquentielle) ---
     const strips: {z: number, pts: Point[], isRamp?: boolean, z1?: number, z2?: number, seq: number}[] = [];
@@ -322,8 +380,22 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
       ctx.restore();
     }
 
-
-  }, [slots, path, editMode, mousePos, altitudeMode, bgColor]);
+    // --- GRID OVERLAY (Moved to TOP for visibility) ---
+    if (showGrid) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 1;
+      // Vertical lines
+      for(let x=0; x<=CW; x+=50) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CH); ctx.stroke();
+      }
+      // Horizontal lines
+      for(let y=0; y<=CH; y+=50) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }, [slots, path, decorations, editMode, mousePos, altitudeMode, bgColor, showGrid]);
 
   useEffect(() => {
     let raf: number;
@@ -345,23 +417,40 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
         dragOffset.current = { x: hit.x - x, y: hit.y - y };
         return;
       }
-      
-      // Add new if no hit and not too close to others
       if ((slots || [])?.some(s => Math.hypot(s.x - x, s.y - y) < 32)) return;
       const newSlot: Slot = {
         id: (slots && slots.length > 0) ? Math.max(...slots.map(s => s.id)) + 1 : 1,
-        x, y,
+        x: showGrid ? Math.round(x/50)*50 : x, 
+        y: showGrid ? Math.round(y/50)*50 : y,
         side: x < 200 ? 'left' : 'right'
       };
       setSlots([...(slots || []), newSlot]);
-    } else {
+    } else if (editMode === 'path') {
       const hitIdx = path.findIndex(p => Math.hypot(p.x - x, p.y - y) < 12);
       if (hitIdx !== -1) {
         setDraggingPathIdx(hitIdx);
         dragOffset.current = { x: path[hitIdx].x - x, y: path[hitIdx].y - y };
         return;
       }
-      setPath([...path, { x, y, z: altitudeMode ? 1 : 0 }]);
+      setPath([...path, { 
+        x: showGrid ? Math.round(x/50)*50 : x, 
+        y: showGrid ? Math.round(y/50)*50 : y, 
+        z: altitudeMode ? 1 : 0 
+      }]);
+    } else if (editMode === 'decor') {
+      const hit = decorations.find(d => Math.hypot(d.x - x, d.y - y) < 20);
+      if (hit) {
+        setDraggingDecorId(hit.id);
+        dragOffset.current = { x: hit.x - x, y: hit.y - y };
+        return;
+      }
+      const newDecor: Decoration = {
+        id: Date.now(),
+        x: showGrid ? Math.round(x/25)*25 : x,
+        y: showGrid ? Math.round(y/25)*25 : y,
+        type: decorType
+      };
+      setDecorations([...decorations, newDecor]);
     }
   };
 
@@ -382,12 +471,19 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
         x: x + dragOffset.current.x, 
         y: y + dragOffset.current.y 
       } : p));
+    } else if (draggingDecorId !== null) {
+      setDecorations(prev => (prev || [])?.map(d => d.id === draggingDecorId ? { 
+        ...d,
+        x: x + dragOffset.current.x, 
+        y: y + dragOffset.current.y 
+      } : d));
     }
   };
 
   const handlePointerUp = () => {
     setDraggingSlotId(null);
     setDraggingPathIdx(null);
+    setDraggingDecorId(null);
   };
 
   const removeSlot = (id: number) => setSlots((slots || [])?.filter(s => s.id !== id));
@@ -395,6 +491,7 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
     if ((path || [])?.length <= 1) return;
     setPath((path || [])?.filter((_, i) => i !== idx));
   };
+  const removeDecor = (id: number) => setDecorations(decorations.filter(d => d.id !== id));
   const clearPath = () => setPath([{x:200, y:70, z:0}]);
 
   const togglePointAltitude = (idx: number) => {
@@ -404,6 +501,7 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
   const getConfig = () => ({
     slots: (slots || [])?.map(({ id, x, y, side }) => ({ id, x, y, r: 16, tower: null, side })),
     path: path,
+    decorations: decorations,
     bgColor: bgColor,
     waves: [
       { waves: 4, baseMobs: 3, mobMult: 1 },
@@ -448,7 +546,7 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
   };
 
   const exportJSON = () => {
-    const data = JSON.stringify({ slots, path, bgColor }, null, 2);
+    const data = JSON.stringify({ slots, path, decorations, bgColor }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -501,7 +599,7 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
       </div>
 
       {/* Floating Control Panel */}
-      <div className={`absolute top-6 bottom-6 right-6 left-6 md:left-auto md:w-[350px] bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[32px] p-6 flex flex-col shadow-[0_30px_60px_rgba(0,0,0,0.8)] transition-all duration-500 ease-in-out pointer-events-none z-[150] ${isCollapsed ? 'translate-y-[calc(100%-40px)] opacity-40' : 'translate-y-0'}`}>
+      <div className={`absolute top-6 bottom-16 right-6 left-6 md:left-auto md:w-[350px] bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[32px] p-6 flex flex-col shadow-[0_30px_60px_rgba(0,0,0,0.8)] transition-all duration-500 ease-in-out pointer-events-none z-[150] ${isCollapsed ? 'translate-y-[calc(100%-40px)] opacity-40' : 'translate-y-0'}`}>
         {/* Toggle Button */}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -566,6 +664,25 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
           >
             <Waypoints size={14} /> TRACÉ
           </button>
+          <button 
+            onClick={() => setEditMode('decor')}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-black text-[10px] tracking-widest transition-all ${editMode === 'decor' ? 'bg-[#ff3d5a] text-white shadow-[0_0_20px_rgba(255,61,90,0.3)]' : 'text-white/40 hover:text-white'}`}
+          >
+            <Sparkles size={14} /> DÉCOR
+          </button>
+        </div>
+
+        <div className="mb-6 pointer-events-auto flex items-center justify-between bg-white/5 p-3 rounded-2xl border border-white/10">
+          <div className="flex items-center gap-3">
+            <GridIcon size={16} className={showGrid ? 'text-[#00f5c4]' : 'text-white/20'} />
+            <span className="text-[10px] font-black tracking-widest text-white/40 uppercase">AFFICHER GRILLE</span>
+          </div>
+          <button 
+            onClick={() => setShowGrid(!showGrid)}
+            className={`w-12 h-6 rounded-full relative transition-all ${showGrid ? 'bg-[#00f5c4]' : 'bg-white/10'}`}
+          >
+            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-all ${showGrid ? 'translate-x-6' : 'translate-x-0'}`} />
+          </button>
         </div>
 
         {/* Content Area */}
@@ -594,7 +711,7 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
                 ))}
               </div>
             </div>
-          ) : (
+          ) : editMode === 'path' ? (
             <div className="flex flex-col flex-1 min-h-0">
               <div className="flex justify-between items-center mb-4 shrink-0 px-1">
                 <h3 className="text-white/40 text-[10px] font-black tracking-widest uppercase">Waypoints ({path.length})</h3>
@@ -622,6 +739,41 @@ export default function LevelEditor({ onBack, onSave, onTest, initialConfig, ini
                         </button>
                       )}
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col flex-1 min-h-0">
+               <div className="flex justify-between items-center mb-4 shrink-0 px-1">
+                <h3 className="text-white/40 text-[10px] font-black tracking-widest uppercase">Éléments de Décor</h3>
+              </div>
+              <div className="flex gap-2 mb-4">
+                  {(['crystal', 'circuit', 'plate'] as const).map(t => (
+                      <button 
+                        key={t}
+                        onClick={() => setDecorType(t)}
+                        className={`flex-1 py-3 rounded-xl border font-black text-[8px] tracking-widest uppercase transition-all ${decorType === t ? 'bg-[#ff3d5a]/20 border-[#ff3d5a] text-[#ff3d5a]' : 'bg-white/5 border-white/10 text-white/40'}`}
+                      >
+                          {t}
+                      </button>
+                  ))}
+              </div>
+              <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar pb-4 flex-1">
+                {decorations.map(dec => (
+                  <div key={dec.id} className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-2xl group hover:border-white/20 transition-all">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 text-[10px] font-black">
+                        {dec.type[0].toUpperCase()}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-white/60 text-[8px] uppercase font-bold">{dec.type}</span>
+                        <span className="text-white/20 text-[7px]">X:{Math.round(dec.x)} Y:{Math.round(dec.y)}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => removeDecor(dec.id)} className="p-2 text-white/10 hover:text-red-400 transition-colors">
+                      <Trash2 size={12} />
+                    </button>
                   </div>
                 ))}
               </div>
