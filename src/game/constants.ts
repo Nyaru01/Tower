@@ -112,6 +112,56 @@ export const getLevelData = (lvl: number) =>
   lvl<=LEVELS_DATA.length ? LEVELS_DATA[lvl-1]
   : {waves:6+Math.floor(lvl/5), baseMobs:8+lvl, mobMult:3+Math.floor(lvl/3)};
 
+export type EnemyTypeId = 'runner' | 'tank' | 'heavy'| 'boss' | 'striker' | 'shield' | 'normal';
+
+export interface SpawnGroup {
+  type: EnemyTypeId;
+  count: number;
+  interval: number; // seconds
+  delayBefore?: number;
+}
+
+export type WavePattern = 'SWARM' | 'SPEARHEAD' | 'SQUAD' | 'MIXED' | 'BOSS';
+
+export const WAVE_PATTERNS: Record<WavePattern, (lvl: number, wave: number) => SpawnGroup[]> = {
+  SWARM: (lvl, _wave) => [
+    { type: 'runner', count: 5 + Math.floor(lvl/2), interval: 0.25 },
+    { type: 'normal', count: 8 + lvl, interval: 0.35, delayBefore: 1.0 }
+  ],
+  SPEARHEAD: (lvl, _wave) => [
+    { type: 'tank', count: 1 + Math.floor(lvl/5), interval: 1.0 },
+    { type: 'heavy', count: 3 + Math.floor(lvl/3), interval: 0.6, delayBefore: 0.8 },
+    { type: 'runner', count: 4, interval: 0.3, delayBefore: 0.5 }
+  ],
+  SQUAD: (_lvl, _wave) => [
+    { type: Math.random() > 0.5 ? 'heavy' : 'striker', count: 4 + Math.floor(_lvl/4), interval: 0.5 },
+    { type: 'shield', count: 2, interval: 0.8, delayBefore: 1.2 }
+  ],
+  MIXED: (_lvl, _wave) => [
+    { type: 'normal', count: 5, interval: 0.6 },
+    { type: 'tank', count: 1, interval: 1.0, delayBefore: 0.5 },
+    { type: 'runner', count: 5, interval: 0.3, delayBefore: 0.5 }
+  ],
+  BOSS: (_lvl, _wave) => [
+    { type: 'heavy', count: 4, interval: 0.6 },
+    { type: 'boss', count: 1, interval: 1.0, delayBefore: 2.0 },
+    { type: 'shield', count: 2, interval: 1.5, delayBefore: 1.0 }
+  ]
+};
+
+export const getWavePattern = (_lvl: number, _wave: number, isLastWave: boolean): WavePattern => {
+  if (isLastWave) return 'BOSS';
+  const r = Math.random();
+  if (r < 0.25) return 'SWARM';
+  if (r < 0.50) return 'SPEARHEAD';
+  if (r < 0.75) return 'SQUAD';
+  return 'MIXED';
+};
+
+export const ENEMY_DAMAGE: Record<EnemyTypeId, number> = {
+  runner: 1, normal: 1, heavy: 2, tank: 2, striker: 2, shield: 2, boss: 5
+};
+
 export type TargetMode = 'first'|'last'|'strong';
 
 export const TM_LABELS:Record<TargetMode,string>={first:'1er',last:'Dern.',strong:'Fort'};

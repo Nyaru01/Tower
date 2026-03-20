@@ -6,22 +6,42 @@ export class Enemy {
   history:{x:number,y:number}[]=[];hitFlash=0;wobble:number;spawnAnim=0;slowTimer=0;
   path:{x:number,y:number}[];targetWpIdx=0;shield=0;maxShield=0;lastResistTime=0;
   shootTimer=1.5;
-  constructor(abs:number,path:{x:number,y:number}[],isBoss=false){
+  constructor(abs:number, path: {x:number,y:number}[], isBoss=false, forcedType?: string){
     this.path=path;
     this.x=path[0].x+(Math.random()*16-8);
     this.y=path[0].y+(Math.random()*16-8);
     this.isBoss=isBoss;this.wobble=Math.random()*Math.PI*2;
     this.targetWpIdx=1;
-    // HP scaling: +65% boost to base difficulty (up from +20%) to match power
-    const hm = (1 + abs * 0.18 + Math.pow(Math.max(0, abs - 8), 1.4) * 0.04) * 1.4;
-    const sb = abs * 2.2; 
-    const rand = Math.random();
-    if(isBoss){this.type='boss';this.color=ENEMY_TYPES.boss.color;this.speed=26+sb*0.4;this.maxHp=300*hm;this.radius=22;this.shootTimer=2.0;}
-    else if(abs>8&&rand>0.85){this.type='shield';this.color=ENEMY_TYPES.shield.color;this.speed=45+sb*0.7;this.maxHp=35*hm;this.radius=11;this.shield=3;this.maxShield=3;}
-    else if(abs>=1&&rand<0.35){this.type='striker';this.color=ENEMY_TYPES.striker.color;this.speed=48+sb*0.8;this.maxHp=45*hm;this.radius=10;this.shootTimer=3.0;}
-    else if(abs>3&&rand>0.75){this.type='tank';this.color=ENEMY_TYPES.tank.color;this.speed=32+sb*0.55;this.maxHp=52*hm;this.radius=13;}
-    else if(abs>2&&rand>0.5){this.type='fast';this.color=ENEMY_TYPES.runner.color;this.speed=95+sb*1.3;this.maxHp=13*hm;this.radius=7;}
-    else{this.type='normal';this.color='#94a3b8';this.speed=58+sb;this.maxHp=22*hm;this.radius=9;}
+    
+    // HP scaling: steady growth
+    const hm = (1 + abs * 0.18 + Math.pow(Math.max(0, abs - 8), 1.35) * 0.045);
+    // Speed scaling: Logarithmic to keep game playable at high levels
+    const sb = Math.log(1 + abs) * 14.5; 
+    
+    this.type = forcedType || (isBoss ? 'boss' : 'normal');
+
+    switch(this.type){
+      case 'boss':
+        this.color=ENEMY_TYPES.boss.color;this.speed=28+sb*0.5;this.maxHp=320*hm;this.radius=22;this.shootTimer=2.0;this.isBoss=true;
+        break;
+      case 'shield':
+        this.color=ENEMY_TYPES.shield.color;this.speed=42+sb*0.8;this.maxHp=42*hm;this.radius=11;this.shield=3;this.maxShield=3;
+        break;
+      case 'striker':
+        this.color=ENEMY_TYPES.striker.color;this.speed=50+sb*0.9;this.maxHp=48*hm;this.radius=10;this.shootTimer=3.0;
+        break;
+      case 'tank':
+        this.color=ENEMY_TYPES.tank.color;this.speed=30+sb*0.6;this.maxHp=65*hm;this.radius=13;
+        break;
+      case 'heavy':
+        this.color='#64748b';this.speed=38+sb*0.75;this.maxHp=85*hm;this.radius=12;
+        break;
+      case 'runner':
+        this.color=ENEMY_TYPES.runner.color;this.speed=105+sb*1.5;this.maxHp=14*hm;this.radius=7;
+        break;
+      default: // normal
+        this.type='normal';this.color='#94a3b8';this.speed=62+sb*1.1;this.maxHp=25*hm;this.radius=9;
+    }
     this.baseSpeed=this.speed;this.hp=this.maxHp;
   }
   update(dt:number, audio?:{high:number}){

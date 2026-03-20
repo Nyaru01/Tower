@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Settings, ChevronRight, Shield, Cpu, Rocket, Sword, Edit3, ChevronDown, Database, CloudDownload, RefreshCw } from 'lucide-react';
+import { X, Settings, ChevronRight, Shield, Rocket, Sword, Edit3, ChevronDown, Database, CloudDownload, RefreshCw } from 'lucide-react';
 import { TOWER_TYPES, ENEMY_TYPES } from '../game/constants';
+import CareerTree from './CareerTree';
 
 interface MainMenuProps {
-  onPlay: () => void;
+  onSelectCareerLevel: (lvl: number) => void;
   onSelectLevel: (lvl: number) => void;
   currentLevel: number;
+  maxLevelUnlocked: number;
   onOpenEditor: () => void;
   onOpenSettings: () => void;
   officialLevels: Record<number, any>;
@@ -15,7 +17,7 @@ interface MainMenuProps {
 
 const ENEMIES = Object.values(ENEMY_TYPES || {})?.map(e => ({
   ...e,
-  icon: <e.icon size={20} />
+  Icon: e.icon
 }));
 
 const TOWERS_INFO = Object.values(TOWER_TYPES || {})?.map(t => ({
@@ -25,13 +27,15 @@ const TOWERS_INFO = Object.values(TOWER_TYPES || {})?.map(t => ({
   color: t.color,
   strength: t.desc,
   desc: t.desc,
-  stats: t.statBar
+  stats: t.statBar,
+  Icon: t.icon
 }));
 
-export default function MainMenu({ onPlay, onSelectLevel, currentLevel, onOpenEditor, onOpenSettings, officialLevels, updateAvailable, onCheckUpdate }: MainMenuProps) {
+export default function MainMenu({ onSelectCareerLevel, onSelectLevel, currentLevel, maxLevelUnlocked, onOpenEditor, onOpenSettings, officialLevels, updateAvailable, onCheckUpdate }: MainMenuProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showLevelSelect, setShowLevelSelect] = useState(false);
   const [showBestiary, setShowBestiary] = useState(false);
+  const [showCareerTree, setShowCareerTree] = useState(false);
   const [bestiaryTab, setBestiaryTab] = useState<'enemies' | 'towers'>('enemies');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -235,7 +239,7 @@ export default function MainMenu({ onPlay, onSelectLevel, currentLevel, onOpenEd
 
           {/* Main Action Nodes */}
           <div className="w-full space-y-4">
-            <button onClick={onPlay} className="anim-up relative w-full h-24 holo-card group corner-accent" style={{ animationDelay: '0.3s', opacity: 0, '--accent': '#00f5c4' } as any}>
+            <button onClick={() => setShowCareerTree(true)} className="anim-up relative w-full h-24 holo-card group corner-accent" style={{ animationDelay: '0.3s', opacity: 0, '--accent': '#00f5c4' } as any}>
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent opacity-0 group-active:opacity-100 transition-opacity" />
               <div className="flex items-center gap-6 px-7 h-full">
                 <div className="relative">
@@ -371,7 +375,7 @@ export default function MainMenu({ onPlay, onSelectLevel, currentLevel, onOpenEd
                {bestiaryTab === 'enemies' ? (ENEMIES || []).map((enemy) => (
                 <div key={enemy.id} className={`holo-card border-none bg-white/[0.02] ${expandedId === enemy.id ? 'bg-white/[0.06]' : ''}`}>
                   <button onClick={() => setExpandedId(expandedId === enemy.id ? null : enemy.id)} className="w-full h-20 flex items-center gap-5 px-5">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${enemy.color}15`, border: `1px solid ${enemy.color}40`, color: enemy.color }}>{enemy.icon}</div>
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${enemy.color}15`, border: `1px solid ${enemy.color}40`, color: enemy.color }}>{enemy.Icon && <enemy.Icon size={20} />}</div>
                     <div className="flex flex-col items-start translate-y-0.5">
                       <span className="text-white font-bold tracking-tight uppercase leading-none">{enemy.name}</span>
                       <span className="mf text-[7px] font-bold text-white/20 uppercase mt-1.5">{enemy.type}</span>
@@ -397,7 +401,7 @@ export default function MainMenu({ onPlay, onSelectLevel, currentLevel, onOpenEd
                )) : (TOWERS_INFO || []).map((tower: any) => (
                 <div key={tower.id} className={`holo-card border-none bg-white/[0.02] ${expandedId === tower.id ? 'bg-white/[0.06]' : ''}`}>
                   <button onClick={() => setExpandedId(expandedId === tower.id ? null : tower.id)} className="w-full h-20 flex items-center gap-5 px-5">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg" style={{ background: `${tower.color}15`, border: `1px solid ${tower.color}40`, color: tower.color }}><Cpu size={22} /></div>
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg" style={{ background: `${tower.color}15`, border: `1px solid ${tower.color}40`, color: tower.color }}>{tower.Icon && <tower.Icon size={22} />}</div>
                     <div className="flex flex-col items-start translate-y-0.5">
                       <span className="text-white font-bold tracking-tight uppercase leading-none">{tower.name}</span>
                       <span className="mf text-[7px] font-bold text-white/20 uppercase mt-1.5">{tower.role}</span>
@@ -426,6 +430,16 @@ export default function MainMenu({ onPlay, onSelectLevel, currentLevel, onOpenEd
                <div className="h-20" />
             </div>
           </div>
+        )}
+        {showCareerTree && (
+          <CareerTree 
+            maxLevelUnlocked={maxLevelUnlocked} 
+            onSelectLevel={(lvl) => {
+              onSelectCareerLevel(lvl);
+              setShowCareerTree(false);
+            }} 
+            onClose={() => setShowCareerTree(false)} 
+          />
         )}
       </div>
     </div>

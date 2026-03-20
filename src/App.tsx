@@ -5,7 +5,7 @@ import MainMenu from './ui/MainMenu';
 import LevelEditor from './ui/LevelEditor';
 import { 
   CW, CH, C, TOWER_TYPES, TALENT_TREE, ALL_REWARDS, computeBonuses, getLevelData, pickRewards, TM_CYCLE, TM_LABELS, INITIAL_LEVELS,
-  type TalentBonuses, type Reward
+  type TalentBonuses, type Reward, type SpawnGroup, WAVE_PATTERNS, getWavePattern, ENEMY_DAMAGE, type EnemyTypeId
 } from './game/constants';
 import { FloatingText, Particle, RingBurst, AoeBlast } from './game/entities/effects';
 import { EnemyProjectile } from './game/entities/Projectile';
@@ -342,7 +342,12 @@ export default function App(){
   });
 
   const setDia=useCallback((v:number|((p:number)=>number))=>{
-    setDiamonds(prev=>{const n=typeof v==='function'?v(prev):v;dRef.current=n;return n;});
+    setDiamonds(prev=>{
+      const n=typeof v==='function'?v(prev):v;
+      const final = Math.max(0, n);
+      dRef.current=final;
+      return final;
+    });
   },[]);
   const addDia=useCallback((n:number)=>setDia(p=>p+n),[setDia]);
 
@@ -474,7 +479,12 @@ export default function App(){
   const gs=useRef<any>({
     lastTime:0,speedMultiplier:1,shakeTime:0,flashAlpha:0,
     enemies:[],projectiles:[],enemyProjectiles:[],particles:[],floatingTexts:[],orbParticles:[],rings:[],aoeBlasts:[],
-    spawnTimer:0,enemiesToSpawn:0,totalWaveEnemies:0,waveActive:false,
+    spawnQueue: [] as SpawnGroup[],
+    currentGroup: null as SpawnGroup | null,
+    spawnTimer: 0,
+    enemiesToSpawn: 0, 
+    totalWaveEnemies: 0,
+    waveActive: false,
     autoWaveTimer:0,
     level:1,wave:1,status:'idle',baseHp:10,kills:0,bossPoints:0, aoeBombs:0,
     slots:[], path:[{x:200,y:70},{x:200,y:675}], bgColor: '#168f78',
@@ -879,51 +889,58 @@ export default function App(){
       const state=gs.current;const bon=bonusesRef.current;let ns=false;
       if(Math.random()<0.55)spawnOrb(state);
       state.orbParticles=state.orbParticles?.filter((p:any)=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=0.92;p.vy*=0.94;p.life-=dt*2.2;return p.life>0;});
-      if(state.waveActive){
-        if(state.enemiesToSpawn>0){
-          state.spawnTimer-=dt;
-          if(state.spawnTimer<=0){
-            const isBossWave = state.wave % getLevelData(state.level).waves === 0;
-            const isFinalSpawn = state.enemiesToSpawn === 1;
-            
-            // If boss wave: spawn boss only at the very end or middle, otherwise regular mobs
-            const spawnBossNow = isBossWave && isFinalSpawn;
-            const abs = (state.level-1)*5 + state.wave;
-            
-            state.enemies.push(new Enemy(abs, state.path, spawnBossNow));
-            state.enemiesToSpawn--;
-            state.spawnTimer = isBossWave ? 0.35 : 0.6; // Faster spawning for boss escorts
-          }
+
+      if (state.waveActive) {
+        state.spawnTimer -= dt;
+        
+        if (!state.currentGroup && state.spawnQueue.length > 0) {
+          state.currentGroup = state.spawnQueue.shift() || null;
+          if (state.currentGroup && state.currentGroup.delayBefore) state.spawnTimer = state.currentGroup.delayBefore;
+          else state.spawnTimer = 0;
         }
-        state.enemies=state.enemies?.filter((e:Enemy)=>{
-          if(e.update(dt,state.audio)){
-            const dmg=e.isBoss?Math.max(1,5-bon.bossReduct):1;
-            state.baseHp-=dmg;state.shakeTime=e.isBoss?0.9:0.4;state.flashAlpha=0.3;ns=true;
-            if(state.baseHp<=0){state.baseHp=0;state.status='game_over';setIsPlaying(false);isPlayingRef.current=false;}
-            return false;
-          }
-          if (e.hp <= 0) {
-            if (e.isBoss) {
-              state.aoeBombs++;
-              state.floatingTexts.push(new FloatingText(e.x, e.y - 40, "+1 BOMBE AOE!", 2, '#ef4444'));
-            }
-            return false;
-          }
-          return true;
-        });
-        if(state.enemies.length===0&&state.enemiesToSpawn===0&&state.status!=='game_over'){
-          state.waveActive=false;const ld=getLevelData(state.level);
-          if(state.wave>=ld.waves){
-            state.status='level_complete';
-            addDia(100); // 100 Credits cumulative bonus
-            setTalentPoints(p=>p+1);
-            setLevelRewards(pickRewards(state.level));
-            if(bon.regenPerLevel>0)state.baseHp=Math.min(10+bon.bonusHp,state.baseHp+bon.regenPerLevel);
-            speedBoostRef.current=false;goldRushRef.current=false;towerDiscountRef.current=false;
-          } else {state.wave++;state.status='idle';state.autoWaveTimer=10;}ns=true;
+
+        if (state.currentGroup && state.spawnTimer <= 0) {
+          const abs = (state.level - 1) * 5 + state.wave;
+          state.enemies.push(new Enemy(abs, state.path, state.currentGroup.type === 'boss', state.currentGroup.type));
+          state.currentGroup.count--;
+          state.enemiesToSpawn--; 
+          if (state.currentGroup.count <= 0) state.currentGroup = null;
+          else state.spawnTimer = state.currentGroup.interval;
+          ns = true;
         }
       }
-      if(state.status==='idle'&&state.autoWaveTimer>0 && tpRef.current === 0){
+
+      state.enemies=state.enemies?.filter((e:Enemy)=>{
+        if(e.update(dt,state.audio)){
+          const dmg = ENEMY_DAMAGE[e.type as EnemyTypeId] || 1;
+          const reducedDmg = e.isBoss ? Math.max(1, dmg - bon.bossReduct) : dmg;
+          state.baseHp = Math.max(0, state.baseHp - reducedDmg);
+          state.shakeTime = e.isBoss?0.9:0.4; state.flashAlpha=0.3; ns=true;
+          if(state.baseHp<=0){state.baseHp=0;state.status='game_over';setIsPlaying(false);isPlayingRef.current=false;}
+          return false;
+        }
+        if (e.hp <= 0) {
+          if (e.isBoss) {
+            state.aoeBombs++;
+            state.floatingTexts.push(new FloatingText(e.x, e.y - 40, "+1 BOMBE AOE!", 2, '#ef4444'));
+          }
+          return false;
+        }
+        return true;
+      });
+
+      if(state.enemies.length===0&&state.enemiesToSpawn===0&&state.status==='playing'){
+        state.waveActive=false;const ld=getLevelData(state.level);
+        if(state.wave>=ld.waves){
+          state.status='level_complete';
+          addDia(100); 
+          setTalentPoints(p=>p+1);
+          setLevelRewards(pickRewards(state.level));
+          if(bon.regenPerLevel>0)state.baseHp=Math.min(10+bon.bonusHp,state.baseHp+bon.regenPerLevel);
+          speedBoostRef.current=false;goldRushRef.current=false;towerDiscountRef.current=false;
+        } else {state.wave++;state.status='idle';state.autoWaveTimer=10;}ns=true;
+      }
+      if(state.status==='idle'&&state.autoWaveTimer>0){
         state.autoWaveTimer-=dt;
         ns=true; // Sync UI counter
         if(state.autoWaveTimer<=0){
@@ -1073,7 +1090,7 @@ export default function App(){
       gs.current.floatingTexts.push(new FloatingText(slot.tower.x,slot.tower.y-20,'GRATUIT!',1,'#60a5fa'));
       setActiveBuffs(b=>({...b,freeUpgrade:false}));
       success = true;
-    } else if(diamonds >= slot.tower.upgradeCost){
+    } else if(dRef.current >= slot.tower.upgradeCost){
       setDia(p=>p-slot.tower.upgradeCost);
       slot.tower.upgrade();
       playBuySound();
@@ -1085,7 +1102,7 @@ export default function App(){
       setSelSlotId(null);
       selSlotIdRef.current = null;
     }
-  },[selSlotId,setDia,syncUI,diamonds]);
+  },[selSlotId,setDia,syncUI]);
 
   const handleSell=useCallback(()=>{
     if(selSlotId===null)return;const slot=(gs.current.slots || [])?.find((s:any)=>s.id===selSlotId);if(!slot?.tower)return;
@@ -1139,29 +1156,40 @@ export default function App(){
       setDia(100);setIsPlaying(true);isPlayingRef.current=true;setGameSpeed(1);
       setShowPauseModal(false);
       if (gameMode === 'arcade') {
-        // Full talent reset for Arcade attempt
+        const pts = Math.max(0, state.level - 1);
         setUnlockedTalents(new Set());
-        setTalentPoints(0);
+        setTalentPoints(pts);
         bonusesRef.current = computeBonuses(new Set());
+        if (pts > 0) setShowTalents(true);
       } else {
         loadCareerProgress();
       }
       initLevel(state.level);
       syncUI();
     } else if(state.status==='idle'){
-      const ld=getLevelData(state.level);const isBoss=state.wave===ld.waves;
-      const mobCount = Math.floor(ld.baseMobs+state.wave*ld.mobMult);
-      const total=isBoss?mobCount+5:mobCount;
-      state.enemiesToSpawn=total;state.totalWaveEnemies=total;
-      state.spawnTimer=0;state.waveActive=true;state.status='playing';
+      const ld=getLevelData(state.level);
+      const isBossWave = state.wave === ld.waves;
+      const patternName = getWavePattern(state.level, state.wave, isBossWave);
+      state.spawnQueue = WAVE_PATTERNS[patternName](state.level, state.wave);
+      
+      // Calculate total enemies for UI/Logic
+      const total = state.spawnQueue.reduce((acc: number, g: SpawnGroup) => acc + g.count, 0);
+      state.enemiesToSpawn = total;
+      state.totalWaveEnemies = total;
+      
+      state.spawnTimer=0.5; // Small delay before first spawn
+      state.waveActive=true;
+      state.status='playing';
+      state.currentGroup = null;
+
       if(state.autoWaveTimer>0){
         addDia(10);
         state.floatingTexts.push(new FloatingText(200,380,"+10♦ Manuel!",0,'#4ade80'));
       }
       setIsPlaying(true);isPlayingRef.current=true;
       setWaveAnnounce({
-        title: isBoss ? 'ALERTE BOSS' : `VAGUE ${state.wave}`,
-        subtitle: isBoss ? 'DÉGÂTS CRITIQUES : 5' : `SECTEUR ${state.level}`
+        title: isBossWave ? 'ALERTE BOSS' : `VAGUE ${state.wave}`,
+        subtitle: isBossWave ? 'MENACE CRITIQUE' : `PATTERN : ${patternName}`
       });
       setTimeout(()=>setWaveAnnounce(null),2000);
       syncUI();
@@ -1228,17 +1256,15 @@ export default function App(){
 
       {isInMenu ? (
         <MainMenu
-          onPlay={() => { 
-            // Explicitly resume audio on click
+
+          onSelectCareerLevel={(lvl) => {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             bgMusicRef.current?.play().catch(e => console.error("Audio trigger failed:", e));
-            
             setGameMode('career');
-            loadCareerProgress(); // Load saved career
-            setIsInMenu(false); 
-            // In Career, we don't force reset diamonds here to allow resuming with what was saved
-            initLevel(maxLevelUnlocked); 
-            syncUI(); 
+            loadCareerProgress();
+            setIsInMenu(false);
+            initLevel(lvl);
+            syncUI();
           }}
           onSelectLevel={(lvl) => {
             if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -1261,6 +1287,7 @@ export default function App(){
             }
           }}
           currentLevel={uiState.level}
+          maxLevelUnlocked={maxLevelUnlocked}
           onOpenEditor={() => { setIsInMenu(false); setIsInEditor(true); }}
           onOpenSettings={() => setShowSettings(true)}
           officialLevels={officialLevels}
@@ -2023,7 +2050,7 @@ export default function App(){
                 <h2 className="absolute inset-0 text-[#00f5c4] font-black text-4xl tracking-tighter glitch" style={{textShadow:'0 0 20px rgba(0,245,196,0.5)'}}>PAUSE</h2>
               </div>
               <div className="flex flex-col gap-4 w-full">
-                <button onClick={() => setShowPauseModal(false)} 
+                <button onClick={() => { setShowPauseModal(false); setIsPlaying(true); isPlayingRef.current = true; }} 
                   className="w-full py-5 rounded-2xl bg-[#00f5c4] text-[#0b0a16] font-black tracking-[0.2em] active:scale-95 transition-all shadow-[0_0_30px_rgba(0,245,196,0.3)] hover:brightness-110">
                   REPRENDRE
                 </button>
