@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Zap, Skull, Flame, Heart, Star, Wind, DollarSign, Tag, Pause, FastForward, RotateCcw, Trophy, X, ChevronRight, Dna, Music, Swords, Target, ArrowUpCircle, Trash2 } from 'lucide-react';
+import { Zap, Skull, Flame, Heart, Star, Wind, DollarSign, Tag, Pause, FastForward, RotateCcw, Trophy, X, ChevronRight, Music, Swords, Target, ArrowUpCircle, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import MainMenu from './ui/MainMenu';
 import LevelEditor from './ui/LevelEditor';
@@ -303,6 +303,7 @@ export default function App(){
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [levelRewards,setLevelRewards]=useState<Reward[]>([]);
   const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null);
+  const [showTalentReminder, setShowTalentReminder] = useState(false);
 
   const freeUpgradeRef=useRef(false);
   const goldRushRef=useRef(false);
@@ -1281,9 +1282,9 @@ export default function App(){
             initLevel(lvl);
             syncUI();
             
-            // Open talent panel if points available
+            // Open talent panel reminder if points available
             if (initialPts > 0) {
-              toggleTalents(true);
+              setShowTalentReminder(true);
             }
           }}
           currentLevel={uiState.level}
@@ -1937,6 +1938,16 @@ export default function App(){
                 ${gameSpeed===2?'bg-[#22c55e] border-[#22c55e] text-[#0b0a16]':'bg-[#171626] border-[#252438] text-white'}`}>
               <FastForward size={20}/>
             </button>
+            {talentPoints > 0 && (
+              <button onClick={() => toggleTalents(true)}
+                className="w-14 h-14 rounded-2xl border-2 border-[#fbbf24]/50 bg-[#fbbf24]/10 pointer-events-auto active:scale-90 transition-all flex flex-col items-center justify-center shadow-[0_0_15px_rgba(251,191,36,0.2)] group">
+                <div className="relative">
+                  <Star size={18} className="text-[#fbbf24] animate-pulse" fill="currentColor" />
+                  <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-white rounded-full flex items-center justify-center text-[7px] font-black text-black border border-[#fbbf24]">{talentPoints}</div>
+                </div>
+                <span className="text-[7px] font-black text-[#fbbf24] mt-1 tracking-widest uppercase">TALENTS</span>
+              </button>
+            )}
           </div>
 
           {/* DIAMONDS (Shop Button) */}
@@ -1965,31 +1976,13 @@ export default function App(){
 
             {/* BOUTON VAGUE PRENIUM / TALENTS */}
             <button 
-              onClick={() => {
-                if (talentPoints > 0 && uiState.status !== 'playing') {
-                  toggleTalents(true);
-                } else {
-                  handleAction();
-                }
-              }} 
+              onClick={handleAction} 
               disabled={uiState.status==='playing'}
               className={`w-14 h-14 rounded-2xl relative flex flex-col items-center justify-center pointer-events-auto active:scale-95 transition-all shadow-2xl overflow-hidden group
                 ${uiState.status==='playing' ? 'bg-[#171626]/50 border border-white/5 opacity-50' 
-                  : (talentPoints > 0 ? 'bg-[#ff4d6d]/20 border-2 border-[#ff4d6d]/60 shadow-[0_0_20px_#ff4d6d44]' : 'bg-[#171626] border-2 border-white/10 hover:border-white/30')}`}>
+                  : (uiState.status === 'idle' && autoCountdown > 0 ? 'bg-[#00f5c4]/10 border-2 border-[#00f5c4]/40 shadow-[0_0_20px_#00f5c433]' : 'bg-[#171626] border-2 border-white/10 hover:border-white/30')}`}>
               
-              {uiState.status === 'idle' && talentPoints === 0 && autoCountdown === 0 && (
-                <div className="absolute inset-0 bg-[#00f5c4]/10 animate-pulse" />
-              )}
-              
-              {uiState.status === 'idle' && talentPoints > 0 ? (
-                <div className="flex flex-col items-center justify-center h-full relative z-10">
-                   <div className="relative mb-1">
-                      <Dna size={20} className="text-[#ff4d6d] animate-pulse drop-shadow-[0_0_8px_#ff4d6d]" />
-                      <div className="absolute -top-2 -right-2 w-3 h-3 bg-white rounded-full flex items-center justify-center text-[8px] font-black text-black border border-[#ff4d6d]">!</div>
-                   </div>
-                   <span className="gf text-[8px] font-black text-[#ff4d6d] tracking-widest uppercase">TALENTS</span>
-                </div>
-              ) : uiState.status === 'idle' && autoCountdown > 0 ? (
+              {uiState.status === 'idle' && autoCountdown > 0 ? (
                 <div className="flex flex-col items-center justify-center h-full relative z-10">
                   <div className={`mf font-black text-xl transition-colors duration-300 ${autoCountdown <= 3 ? 'text-[#ff3d5a] count-urgent' : 'text-[#22c55e]'}`}>
                     {autoCountdown}s
@@ -2078,6 +2071,50 @@ export default function App(){
         )}
       </div>
     )}
+    
+    {/* Talent Requirement/Reminder Popup */}
+    <AnimatePresence>
+      {showTalentReminder && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="bg-[#0b0a16] border border-[#00f5c4]/30 rounded-[32px] p-8 max-w-sm w-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] tech-border relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00f5c4] to-transparent opacity-50" />
+            <div className="flex flex-col items-center text-center">
+              <div className="relative mb-6">
+                <div className="w-16 h-16 rounded-2xl bg-[#00f5c4]/10 flex items-center justify-center mb-0 border border-[#00f5c4]/20">
+                  <Star size={32} className="text-[#00f5c4] animate-pulse" />
+                </div>
+                <div className="absolute -top-2 -right-2 bg-[#00f5c4] text-[#0b0a16] w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-[#0b0a16]">
+                  {talentPoints}
+                </div>
+              </div>
+              <h2 className="gf text-white font-black text-2xl tracking-tighter uppercase mb-2">Talents_Prêts</h2>
+              <p className="mf text-white/50 text-[10px] leading-relaxed mb-8 uppercase tracking-widest font-bold">
+                Déployez vos capacités stratégiques avant d'engager le combat.
+              </p>
+              <div className="flex flex-col gap-3 w-full">
+                <button 
+                  onClick={() => { setShowTalentReminder(false); toggleTalents(true); }}
+                  className="w-full py-4 bg-[#00f5c4] text-[#0b0a16] font-black tracking-[0.2em] rounded-2xl hover:bg-[#00f5c4]/90 transition-all active:scale-95 shadow-[0_10px_30px_rgba(0,245,196,0.3)]"
+                >
+                  CONFIGURER
+                </button>
+                <button 
+                  onClick={() => setShowTalentReminder(false)}
+                  className="w-full py-4 bg-white/5 text-white/40 font-bold tracking-[0.2em] rounded-2xl hover:bg-white/10 transition-all active:scale-95 text-[10px]"
+                >
+                  PLUS TARD
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
 
     {showSettings && (
       <SettingsModal 
