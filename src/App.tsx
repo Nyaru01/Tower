@@ -301,6 +301,11 @@ export default function App(){
   const [isInEditor,setIsInEditor]=useState(false);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+
+  // Sync PWA status with updateAvailable
+  useEffect(() => {
+    if (needRefresh) setUpdateAvailable(true);
+  }, [needRefresh]);
   const [levelRewards,setLevelRewards]=useState<Reward[]>([]);
   const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null);
   const [showTalentReminder, setShowTalentReminder] = useState(false);
@@ -553,16 +558,24 @@ export default function App(){
   }, [isInMenu, isInEditor, initLevel, syncUI, uiState.level]);
 
   const checkVersion = useCallback(async () => {
+    // 1. Manually check Service Worker for updates
+    updateServiceWorker();
+
+    // 2. Fallback: API version check
     try {
       const res = await fetch('/api/version');
-      const data = await res.json();
-      if (appVersion && data.version !== appVersion) {
-        setUpdateAvailable(true);
-      } else if (!appVersion) {
-        setAppVersion(data.version);
+      if (res.ok) {
+        const data = await res.json();
+        if (appVersion && data.version !== appVersion) {
+          setUpdateAvailable(true);
+        } else if (!appVersion) {
+          setAppVersion(data.version);
+        }
       }
-    } catch (e) {}
-  }, [appVersion]);
+    } catch (e) {
+      console.log("Version check skipped (offline or error)");
+    }
+  }, [appVersion, updateServiceWorker]);
 
   useEffect(() => {
     checkVersion();
@@ -1293,7 +1306,13 @@ export default function App(){
           onOpenSettings={() => setShowSettings(true)}
           officialLevels={officialLevels}
           updateAvailable={updateAvailable}
-          onCheckUpdate={checkVersion}
+          onCheckUpdate={() => {
+            if (updateAvailable) {
+              updateServiceWorker(true);
+            } else {
+              checkVersion();
+            }
+          }}
         />
       ) : isInEditor ? (
         <LevelEditor
@@ -2092,7 +2111,7 @@ export default function App(){
                   {talentPoints}
                 </div>
               </div>
-              <h2 className="gf text-white font-black text-2xl tracking-tighter uppercase mb-2">Talents_Prêts</h2>
+              <h2 className="gf text-white font-black text-2xl tracking-tighter uppercase mb-2">Talents prêts</h2>
               <p className="mf text-white/50 text-[10px] leading-relaxed mb-8 uppercase tracking-widest font-bold">
                 Déployez vos capacités stratégiques avant d'engager le combat.
               </p>
@@ -2147,7 +2166,7 @@ export default function App(){
                   Une nouvelle version est disponible sur le serveur.
                 </p>
                 <button 
-                  onClick={() => window.location.reload()}
+                  onClick={() => updateServiceWorker(true)}
                   className="w-full py-4 bg-[#00f5c4] text-[#0b0a16] font-black tracking-[0.2em] rounded-2xl hover:bg-[#00f5c4]/90 transition-all active:scale-95 shadow-[0_10px_30px_rgba(0,245,196,0.3)]"
                 >
                   RECHARGER MAINTENANT

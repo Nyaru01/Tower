@@ -325,7 +325,7 @@ export default function MainMenu({ onSelectCareerLevel, onSelectLevel, currentLe
         <div className="z-20 w-full px-8 pb-10 mt-auto">
           <div className="flex justify-between items-center mb-6">
             <button 
-              onClick={() => updateAvailable ? window.location.reload() : onCheckUpdate?.()}
+              onClick={() => onCheckUpdate?.()}
               className={`p-4 rounded-xl border transition-all active:scale-90 group
                 ${updateAvailable 
                   ? 'bg-red-500/20 border-red-500 text-red-500 shadow-[0_0_20px_rgba(255,61,90,0.4)]' 

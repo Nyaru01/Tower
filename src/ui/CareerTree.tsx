@@ -73,7 +73,7 @@ export default function CareerTree({ maxLevelUnlocked, onSelectLevel, onClose }:
           </button>
           
           <div className="text-right">
-            <h1 className="text-sm font-black tracking-[0.2em] uppercase text-[#00f5c4] truncate max-w-[200px] sm:max-w-none">Progression_Carrière</h1>
+            <h1 className="text-sm font-black tracking-[0.2em] uppercase text-[#00f5c4] truncate max-w-[200px] sm:max-w-none">Progression</h1>
             <p className="mf text-zinc-500 text-[7px] uppercase tracking-[0.3em] mt-1">Secteur / Unité_01</p>
           </div>
         </div>
