@@ -1143,10 +1143,10 @@ export default function App(){
       }
       state.slots?.forEach((s:any)=>{if(s.tower)s.tower.update(dt,state,bon);});
       state.projectiles = state.projectiles?.filter((p:any)=> p && typeof p.update === 'function' ? !p.update(dt,state,state.audio) : false);
-      state.floatingTexts=state.floatingTexts?.filter((t:FloatingText)=>!t.update(dt));
-      if(settings.effects)state.particles=state.particles?.filter((p:Particle)=>!p.update(dt)); else state.particles=[];
-      state.rings=state.rings?.filter((r:RingBurst)=>!r.update(dt));
-      state.aoeBlasts=state.aoeBlasts?.filter((b:AoeBlast)=>!b.update(dt));
+      state.floatingTexts=state.floatingTexts?.filter((t:any)=> t && typeof t.update === 'function' ? !t.update(dt) : false);
+      if(settings.effects)state.particles=state.particles?.filter((p:any)=> p && typeof p.update === 'function' ? !p.update(dt) : false); else state.particles=[];
+      state.rings=state.rings?.filter((r:any)=> r && typeof r.update === 'function' ? !r.update(dt) : false);
+      state.aoeBlasts=state.aoeBlasts?.filter((b:any)=> b && typeof b.update === 'function' ? !b.update(dt) : false);
       
       // Update dropped crystals
       state.droppedCrystals = state.droppedCrystals?.filter((c: any) => {
