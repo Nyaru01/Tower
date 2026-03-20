@@ -2018,7 +2018,6 @@ export default function App(){
                 <div className="-rotate-45 mf text-base font-black text-[#0b0a16]">{diamonds}</div>
               </div>
             </div>
-            <div className="absolute -bottom-8 left-0 text-white/10 text-[6px] font-black uppercase tracking-widest">v1.2.1-live</div>
           </div>
 
           <div className="flex items-center gap-2 pointer-events-auto">
@@ -2080,21 +2079,7 @@ export default function App(){
         {/* TALENT MODAL */}
     <TalentModal open={showTalents} onClose={()=>toggleTalents(false)} pts={talentPoints} unlocked={unlockedTalents} onUnlock={handleUnlockTalent}/>
         
-    {/* PWA UPDATE PROMPT */}
-    {(needRefresh || updateAvailable) && (
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] bg-[#1a192d] border-2 border-[#00f5c4] px-5 py-3 rounded-2xl shadow-[0_0_30px_rgba(0,245,196,0.2)] flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-        <div className="flex flex-col">
-          <div className="text-[#00f5c4] font-black text-xs tracking-widest uppercase">Mise à jour disponible</div>
-          <div className="text-white/40 text-[10px]">De nouvelles tours sont prêtes !</div>
-        </div>
-        <button onClick={() => updateServiceWorker(true)} className="bg-[#00f5c4] text-[#0b0a16] px-4 py-2 rounded-xl font-black text-[10px] tracking-widest hover:scale-105 transition-transform active:scale-95">
-          ACTUALISER
-        </button>
-        <button onClick={() => setNeedRefresh(false)} className="text-white/20 hover:text-white/40 transition-colors">
-          <X size={16}/>
-        </button>
-      </div>
-    )}
+    {/* PWA UPDATE PROMPT REMOVED - USING GLOBAL MODAL INSTEAD */}
 
     {/* PAUSE MODAL */}
         {showPauseModal && (
@@ -2227,9 +2212,9 @@ export default function App(){
       />
     )}
 
-      {/* Update Available Popup */}
+      {/* Update Available Popup (Global) */}
       <AnimatePresence>
-        {updateAvailable && (
+        {(updateAvailable || needRefresh) && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -2246,7 +2231,10 @@ export default function App(){
                   Une nouvelle version est disponible sur le serveur.
                 </p>
                 <button 
-                  onClick={() => updateServiceWorker(true)}
+                  onClick={() => {
+                    if (needRefresh) updateServiceWorker(true);
+                    else window.location.reload();
+                  }}
                   className="w-full py-4 bg-[#00f5c4] text-[#0b0a16] font-black tracking-[0.2em] rounded-2xl hover:bg-[#00f5c4]/90 transition-all active:scale-95 shadow-[0_10px_30px_rgba(0,245,196,0.3)]"
                 >
                   RECHARGER MAINTENANT
@@ -2256,6 +2244,7 @@ export default function App(){
           </div>
         )}
       </AnimatePresence>
+      <div className="fixed bottom-2 right-4 text-white/10 text-[10px] mf font-black uppercase tracking-[0.2em] pointer-events-none z-[1000]">v1.2.1-live</div>
     </div>
   );
 }
