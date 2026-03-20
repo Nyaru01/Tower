@@ -969,15 +969,18 @@ export default function App(){
         state.autoWaveTimer-=dt;
         ns=true; // Sync UI counter
         if(state.autoWaveTimer<=0){
-          const ld=getLevelData(state.level),isBoss=state.wave===ld.waves;
-          const mobCount = Math.floor(ld.baseMobs+state.wave*ld.mobMult);
-          const total = isBoss ? mobCount + 5 : mobCount; // Boss gets 5 extra escorts
+          const ld=getLevelData(state.level), isBoss=state.wave===ld.waves;
+          const patternName = getWavePattern(state.level, state.wave, isBoss);
+          state.spawnQueue = WAVE_PATTERNS[patternName](state.level, state.wave);
+          const total = state.spawnQueue.reduce((acc: number, g: SpawnGroup) => acc + g.count, 0);
+          
           state.enemiesToSpawn=total;state.totalWaveEnemies=total;state.spawnTimer=0;state.waveActive=true;state.status='playing';
           setWaveAnnounce({
             title: isBoss ? 'ALERTE BOSS' : `VAGUE ${state.wave}`,
             subtitle: isBoss ? 'DÉGÂTS CRITIQUES : 5' : `SECTEUR ${state.level}`
           });
           setTimeout(()=>setWaveAnnounce(null),2000);
+          if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(20);
         }
       }
       state.slots?.forEach((s:any)=>{if(s.tower)s.tower.update(dt,state,bon);});
@@ -2075,7 +2078,7 @@ export default function App(){
     <TalentModal open={showTalents} onClose={()=>toggleTalents(false)} pts={talentPoints} unlocked={unlockedTalents} onUnlock={handleUnlockTalent}/>
         
     {/* PWA UPDATE PROMPT */}
-    {needRefresh && (
+    {(needRefresh || updateAvailable) && (
       <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] bg-[#1a192d] border-2 border-[#00f5c4] px-5 py-3 rounded-2xl shadow-[0_0_30px_rgba(0,245,196,0.2)] flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
         <div className="flex flex-col">
           <div className="text-[#00f5c4] font-black text-xs tracking-widest uppercase">Mise à jour disponible</div>
