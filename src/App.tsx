@@ -2395,8 +2395,13 @@ export default function App(){
                 </p>
                 <button 
                   onClick={() => {
-                    if (needRefresh) updateServiceWorker(true);
-                    else window.location.reload();
+                    if (needRefresh) {
+                      updateServiceWorker(true);
+                      // Force reload as safety fallback if SW update doesn't trigger it
+                      setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                      window.location.reload();
+                    }
                   }}
                   className="w-full py-4 bg-[#00f5c4] text-[#0b0a16] font-black tracking-[0.2em] rounded-2xl hover:bg-[#00f5c4]/90 transition-all active:scale-95 shadow-[0_10px_30px_rgba(0,245,196,0.3)]"
                 >
@@ -2408,7 +2413,7 @@ export default function App(){
         )}
       </AnimatePresence>
       {isInMenu && (
-        <div className="fixed bottom-2 right-4 text-white/20 text-[10px] mf font-black uppercase tracking-[0.2em] pointer-events-none z-[1000] animate-pulse">v1.2.3-STABLE</div>
+        <div className="fixed bottom-2 right-4 text-white/20 text-[10px] mf font-black uppercase tracking-[0.2em] pointer-events-none z-[1000] animate-pulse">v1.2.4-FIX</div>
       )}
     </div>
   );
