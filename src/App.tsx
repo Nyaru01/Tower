@@ -9,7 +9,6 @@ import {
   type TalentBonuses, type Reward, type SpawnGroup, WAVE_PATTERNS, getWavePattern, ENEMY_DAMAGE, type EnemyTypeId
 } from './game/constants';
 import { FloatingText, Particle, RingBurst, AoeBlast } from './game/entities/effects';
-import { EnemyProjectile } from './game/entities/EnemyProjectile';
 import { Enemy } from './game/entities/Enemy';
 import { Tower } from './game/entities/Tower';
 import TalentModal from './ui/TalentModal';
@@ -1143,31 +1142,6 @@ export default function App(){
       }
       state.slots?.forEach((s:any)=>{if(s.tower)s.tower.update(dt,state,bon);});
       state.projectiles = state.projectiles?.filter((p:any)=>!p.update(dt,state,state.audio));
-      state.enemyProjectiles = state.enemyProjectiles?.filter((p:any)=>!p.update(dt,state));
-      
-      // Enemy Offense Logic
-      state.enemies?.forEach((e:any)=>{
-        if((e.isBoss || e.type === 'striker') && (state.slots || [])?.some((s:any)=>s.tower && s.tower.disabledTimer <= 0)){
-          e.shootTimer -= dt;
-          if(e.shootTimer <= 0){
-            const towers = state.slots?.filter((s:any)=>s.tower && s.tower.disabledTimer <= 0)?.map((s:any)=>s.tower);
-            if(towers.length > 0){
-              const nearest = towers.reduce((prev:any,curr:any)=>{
-                const d1=Math.hypot(e.x-prev.x, e.y-prev.y), d2=Math.hypot(e.x-curr.x, e.y-curr.y);
-                return d1 < d2 ? prev : curr;
-              });
-              if(Math.hypot(e.x-nearest.x, e.y-nearest.y) < 280){
-                state.enemyProjectiles.push(new EnemyProjectile(e.x, e.y, nearest, e.isBoss ? 60 : 30, e.color));
-                e.shootTimer = e.isBoss ? 2.5 : 3.5;
-              } else {
-                e.shootTimer = 0.5;
-              }
-            } else {
-              e.shootTimer = 1.0;
-            }
-          }
-        }
-      });
       state.floatingTexts=state.floatingTexts?.filter((t:FloatingText)=>!t.update(dt));
       if(settings.effects)state.particles=state.particles?.filter((p:Particle)=>!p.update(dt)); else state.particles=[];
       state.rings=state.rings?.filter((r:RingBurst)=>!r.update(dt));
@@ -2433,7 +2407,7 @@ export default function App(){
         )}
       </AnimatePresence>
       {isInMenu && (
-        <div className="fixed bottom-2 right-4 text-white/10 text-[10px] mf font-black uppercase tracking-[0.2em] pointer-events-none z-[1000]">v1.2.1-live</div>
+        <div className="fixed bottom-2 right-4 text-white/10 text-[10px] mf font-black uppercase tracking-[0.2em] pointer-events-none z-[1000]">v1.2.2-live</div>
       )}
     </div>
   );
