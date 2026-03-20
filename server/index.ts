@@ -24,7 +24,7 @@ console.log('🔌 [SERVER] Initializing Express...');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const APP_VERSION = "1.2.0"; // Force client update
+const APP_VERSION = "1.2.1"; // Force client update
 
 const OFFICIAL_DEFAULTS = {
   1: {

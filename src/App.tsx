@@ -579,6 +579,8 @@ export default function App(){
         const data = await res.json();
         if (appVersion && data.version !== appVersion) {
           setUpdateAvailable(true);
+          // Auto-trigger SW refresh if manual check found something
+          updateServiceWorker(true);
         } else if (!appVersion) {
           setAppVersion(data.version);
         }
@@ -2016,6 +2018,7 @@ export default function App(){
                 <div className="-rotate-45 mf text-base font-black text-[#0b0a16]">{diamonds}</div>
               </div>
             </div>
+            <div className="absolute -bottom-8 left-0 text-white/10 text-[6px] font-black uppercase tracking-widest">v1.2.1-live</div>
           </div>
 
           <div className="flex items-center gap-2 pointer-events-auto">
